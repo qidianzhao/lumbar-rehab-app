@@ -4,12 +4,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import auth
+from app.api.v1.api import api_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from app.database import Base, engine
     import app.models.user  # noqa: F401
+    import app.models.action  # noqa: F401
+    import app.models.training_plan  # noqa: F401
+    import app.models.assessment  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -26,6 +30,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(api_router, prefix="/api/v1")
 
 
 @app.get("/health")

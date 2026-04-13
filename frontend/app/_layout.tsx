@@ -5,8 +5,10 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
+import { useRouter } from 'expo-router';
 
 import { useColorScheme } from '@/components/useColorScheme';
+import { useAuthStore } from '@/src/stores/authStore';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -47,6 +49,24 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
+  const router = useRouter();
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      await useAuthStore.getState().checkAuth();
+      if (cancelled) {
+        return;
+      }
+      const { accessToken, user } = useAuthStore.getState();
+      if (accessToken && user) {
+        router.replace('/(tabs)');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -57,6 +77,7 @@ function RootLayoutNav() {
         <Stack.Screen name="assessment" options={{ title: '体能测试' }} />
         <Stack.Screen name="profile" options={{ title: '个人中心' }} />
         <Stack.Screen name="actions" options={{ title: '动作库' }} />
+        <Stack.Screen name="plan" options={{ headerShown: false }} />
         <Stack.Screen name="checkin" options={{ title: '打卡' }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
       </Stack>
