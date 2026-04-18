@@ -19,3 +19,4 @@ class Action(Base):
     )
     difficulty_level: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    video_url: Mapped[str | None] = mapped_column(String(512), nullable=True)

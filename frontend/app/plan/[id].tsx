@@ -54,6 +54,13 @@ export default function PlanDetailScreen() {
   const [confirming, setConfirming] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
+  const defaultPlanDay = useMemo(() => {
+    if (!plan?.days?.length) return null;
+    const pw = plan.progress_week ?? 1;
+    const weekDays = plan.days.filter((d) => d.week_number === pw);
+    return weekDays[0] ?? plan.days[0] ?? null;
+  }, [plan]);
+
   useEffect(() => {
     if (!Number.isFinite(planId)) {
       setError('无效的计划 ID');
@@ -191,8 +198,14 @@ export default function PlanDetailScreen() {
         ]}
       >
         <Pressable
-          style={[styles.primaryBtn, { backgroundColor: theme.tint }]}
-          onPress={() => router.push('/training' as Href)}
+          style={[styles.primaryBtn, { backgroundColor: theme.tint, opacity: defaultPlanDay ? 1 : 0.5 }]}
+          disabled={!defaultPlanDay}
+          onPress={() => {
+            if (!plan || !defaultPlanDay) return;
+            router.push(
+              `/training/pre-check?planId=${plan.id}&planDayId=${defaultPlanDay.id}` as Href,
+            );
+          }}
         >
           <Text style={styles.primaryBtnText}>开始训练</Text>
         </Pressable>

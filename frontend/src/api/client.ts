@@ -1,28 +1,29 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
 
 import { STORAGE_KEYS } from '@/src/constants/authStorage';
 
-/**
- * 默认直连本机后端。Android 模拟器访问宿主机请用 10.0.2.2；
- * 真机 Expo Go 请设置 EXPO_PUBLIC_API_BASE=http://<电脑局域网IP>:8000/api/v1
- */
 function resolveBaseUrl(): string {
-  const fromEnv = process.env.EXPO_PUBLIC_API_BASE;
-  if (fromEnv) {
-    return fromEnv.replace(/\/$/, '');
-  }
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:8000/api/v1';
-  }
-  return 'http://localhost:8000/api/v1';
+  // 临时硬编码，绕过环境变量测试
+  return 'http://192.168.5.111:8000/api/v1';
 }
 
 export const api = axios.create({
   baseURL: resolveBaseUrl(),
   timeout: 20000,
 });
+
+api.interceptors.request.use(
+  (config) => {
+    console.log(
+      '📡 API Request:',
+      config.method?.toUpperCase(),
+      `${config.baseURL ?? ''}${config.url ?? ''}`,
+    );
+    return config;
+  },
+  (error) => Promise.reject(error),
+);
 
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   const token = await SecureStore.getItemAsync(STORAGE_KEYS.accessToken);
