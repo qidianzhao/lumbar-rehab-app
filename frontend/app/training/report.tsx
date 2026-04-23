@@ -3,12 +3,15 @@ import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+
+import { shareTrainingReport } from '@/src/services/shareService';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -28,6 +31,7 @@ export default function TrainingReportScreen() {
   const [report, setReport] = useState<SessionFinishData | null>(storeReport);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   // 从历史记录跳转来时，通过 session_id 参数从 API 加载
   useEffect(() => {
@@ -81,6 +85,20 @@ export default function TrainingReportScreen() {
         </Pressable>
       </View>
     );
+  }
+
+  const sessionId = params.session_id ? Number(params.session_id) : report.session_id;
+
+  async function handleShare() {
+    if (!sessionId) return;
+    setSharing(true);
+    try {
+      await shareTrainingReport(sessionId);
+    } catch (e) {
+      Alert.alert('分享失败', e instanceof Error ? e.message : '请稍后重试');
+    } finally {
+      setSharing(false);
+    }
   }
 
   const doneCount = report.action_details.filter((a) => a.is_completed && !a.is_skipped).length;
@@ -156,12 +174,28 @@ export default function TrainingReportScreen() {
           { borderTopColor: theme.tabIconDefault, backgroundColor: theme.background },
         ]}
       >
-        <Pressable
-          style={[styles.outline, { borderColor: theme.tint }]}
-          onPress={() => router.replace('/(tabs)' as Href)}
-        >
-          <Text style={{ color: theme.tint, fontWeight: '700' }}>返回首页</Text>
-        </Pressable>
+        <View style={styles.footerRow}>
+          <Pressable
+            style={[styles.outline, { borderColor: theme.tint, flex: 1 }]}
+            onPress={() => router.replace('/(tabs)' as Href)}
+          >
+            <Text style={{ color: theme.tint, fontWeight: '700' }}>返回首页</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.outline, { borderColor: theme.tint, flex: 1 }, sharing && styles.disabled]}
+            onPress={handleShare}
+            disabled={sharing}
+          >
+            {sharing ? (
+              <ActivityIndicator size="small" color={theme.tint} />
+            ) : (
+              <View style={styles.shareBtn}>
+                <FontAwesome name="share-alt" size={14} color={theme.tint} />
+                <Text style={{ color: theme.tint, fontWeight: '700', marginLeft: 6 }}>分享</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
         <Pressable
           style={[styles.primary, { backgroundColor: theme.tint }]}
           onPress={() => router.push('/(tabs)/plans' as Href)}
@@ -217,4 +251,7 @@ const styles = StyleSheet.create({
   outline: { paddingVertical: 14, borderRadius: 12, borderWidth: 1, alignItems: 'center' },
   primary: { paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
   primaryText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  footerRow: { flexDirection: 'row', gap: 10 },
+  shareBtn: { flexDirection: 'row', alignItems: 'center' },
+  disabled: { opacity: 0.5 },
 });

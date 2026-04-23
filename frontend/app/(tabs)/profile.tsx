@@ -65,6 +65,12 @@ export default function TabProfileScreen() {
           sub: '连续打卡记录',
           href: '/checkin/calendar' as Href,
         },
+        {
+          icon: 'trophy',
+          label: '排行榜',
+          sub: '周/月/年打卡排名',
+          href: '/checkin/leaderboard' as Href,
+        },
       ],
     },
     {
@@ -79,9 +85,8 @@ export default function TabProfileScreen() {
         {
           icon: 'download',
           label: '数据导出',
-          sub: '导出训练数据（即将上线）',
+          sub: '导出训练数据为 PDF',
           href: '/profile/export' as Href,
-          disabled: true,
         },
       ],
     },
@@ -93,7 +98,6 @@ export default function TabProfileScreen() {
           label: '应用设置',
           sub: '通知与偏好',
           href: '/profile/settings' as Href,
-          disabled: true,
         },
         {
           icon: 'sign-out',

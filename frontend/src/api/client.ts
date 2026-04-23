@@ -5,7 +5,7 @@ import { STORAGE_KEYS } from '@/src/constants/authStorage';
 
 function resolveBaseUrl(): string {
   // 临时硬编码，绕过环境变量测试
-  return 'http://192.168.5.111:8000/api/v1';
+  return 'http://192.168.5.119:8000/api/v1';
 }
 
 export const api = axios.create({
