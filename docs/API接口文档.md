@@ -1,9 +1,9 @@
 # 腰突康复运动App — API接口文档
 
-**文档版本：** v1.0
-**日期：** 2026年4月12日
-**配套文档：** PRD v1.0、技术方案文档 v1.0、数据库设计文档 v1.0
-**Base URL：** `https://api.your-domain.com/v1`
+**文档版本：** v1.1
+**日期：** 2026年4月27日
+**配套文档：** PRD v1.0、技术方案文档 v1.1、数据库设计文档 v1.0
+**Base URL：** `http://192.168.5.119:8000/api/v1`（开发环境）
 **认证方式：** Bearer Token（JWT）
 **数据格式：** JSON
 
@@ -315,45 +315,30 @@ PUT /users/me/health-profile
 ### 4.1 获取动作列表
 
 ```
-GET /actions?category=CORE&difficulty=BEGINNER&page=1&page_size=50
+GET /actions
 ```
-
-**查询参数：**
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| category | string | 否 | 筛选分类：WARMUP, CORE, STRETCH |
-| difficulty | string | 否 | 筛选难度：BEGINNER, INTERMEDIATE, ADVANCED |
-| include_forbidden | boolean | 否 | 是否包含禁忌动作，默认false |
 
 **响应：**
 ```json
 {
   "code": 0,
-  "data": {
-    "items": [
-      {
-        "id": "ACT_BRIDGE_01",
-        "name": "臀桥",
-        "name_en": "Glute Bridge",
-        "category": "CORE",
-        "target_muscles": ["臀大肌", "腘绳肌", "核心"],
-        "difficulty": "BEGINNER",
-        "video_url": "https://cdn.your-domain.com/videos/bridge_01.mp4",
-        "video_duration": 45,
-        "thumbnail_url": "https://cdn.your-domain.com/thumbnails/bridge_01.jpg",
-        "description": "仰卧屈膝，双脚踩地与髋同宽...",
-        "key_points": ["保持腰椎中立位", "臀部发力上抬", "顶端停留2秒"],
-        "common_mistakes": ["塌腰", "膝盖内扣"],
-        "is_forbidden": false,
-        "default_sets": 3,
-        "default_reps": "12次",
-        "default_rest_seconds": 30
-      }
-    ],
-    "total": 28
-  }
+  "message": "ok",
+  "data": [
+    {
+      "id": 1,
+      "name": "猫牛式",
+      "phase": "warmup",
+      "difficulty_level": 1,
+      "description": null,
+      "video_url": "http://192.168.5.119:8080/体能测试动作/male-Recovery-thoracic-flexion-and-extensions-mobility-front.mp4"
+    }
+  ]
 }
 ```
+
+`phase` 取值：`warmup`（热身）、`core`（核心）、`stretch`（拉伸）
+
+视频 URL 由 `backend/video_mapping.json` 映射，视频服务器运行在 `http://192.168.5.119:8080`。
 
 ---
 
@@ -363,13 +348,7 @@ GET /actions?category=CORE&difficulty=BEGINNER&page=1&page_size=50
 GET /actions/{action_id}
 ```
 
-**响应：** 同上单个动作的完整字段，额外包含：
-```json
-{
-  "suitable_segments": ["L4_L5", "L5_S1"],
-  "contraindications": "急性期疼痛时避免此动作..."
-}
-```
+**响应：** 同上单个动作字段（直接返回对象，无 code/data 包装）。
 
 ---
 
@@ -862,12 +841,14 @@ POST /ai/chat
 **请求体：**
 ```json
 {
-  "session_id": "dd0e8400-...",
-  "message": "做了10个",
+  "messages": [
+    { "role": "user", "content": "做了10个" }
+  ],
   "context": {
-    "current_action": "ACT_BRIDGE_01",
+    "action_name": "臀桥",
     "current_set": 2,
-    "total_sets": 3
+    "total_sets": 3,
+    "phase": "core"
   }
 }
 ```
@@ -876,27 +857,14 @@ POST /ai/chat
 ```json
 {
   "code": 0,
+  "message": "ok",
   "data": {
-    "reply": "10个不错！休息30秒，准备第3组。最后一组了，加油！",
-    "action": null,
-    "remaining_free_chats": null
+    "reply": "10个不错！休息30秒，准备第3组。"
   }
 }
 ```
 
-**当AI建议暂停训练时：**
-```json
-{
-  "code": 0,
-  "data": {
-    "reply": "听到你说腰部不太舒服，建议先暂停一下。如果疼痛持续，今天就先休息吧。",
-    "action": "SUGGEST_PAUSE",
-    "remaining_free_chats": null
-  }
-}
-```
-
-`action`可能的值：`null`（无特殊操作）、`SUGGEST_PAUSE`（建议暂停）、`SUGGEST_STOP`（建议停止训练）
+模型：`deepseek-chat`（快速响应，适合训练中实时互动）
 
 ---
 
@@ -909,7 +877,9 @@ POST /ai/free-chat
 **请求体：**
 ```json
 {
-  "message": "平板支撑的时候腰总是塌下去怎么办？"
+  "messages": [
+    { "role": "user", "content": "平板支撑的时候腰总是塌下去怎么办？" }
+  ]
 }
 ```
 
@@ -917,76 +887,61 @@ POST /ai/free-chat
 ```json
 {
   "code": 0,
+  "message": "ok",
   "data": {
-    "reply": "平板支撑塌腰是很常见的问题，通常是因为核心力量还不够...",
-    "remaining_free_chats": 12
+    "reply": "平板支撑塌腰通常是核心力量不足..."
   }
 }
 ```
 
-**次数用完时：**
-```json
-{
-  "code": 42902,
-  "message": "今日免费对话次数已用完（15/15），明天再来聊吧~",
-  "data": {
-    "remaining_free_chats": 0,
-    "reset_time": "2026-04-13T00:00:00+08:00"
-  }
-}
-```
+模型：`deepseek-chat`
 
 ---
 
 ### 8.3 语音合成（TTS）
 
 ```
-POST /ai/tts
+POST /voice/tts
 ```
 
 **请求体：**
 ```json
 {
-  "text": "接下来是臀桥，注意双脚踩实地面，不要塌腰哦",
-  "speaker": "xiaoyan",
-  "speed": 50
+  "text": "接下来是臀桥，注意双脚踩实地面"
 }
 ```
 
-**响应：**
-```json
-{
-  "code": 0,
-  "data": {
-    "audio_url": "https://api.your-domain.com/v1/ai/tts/audio/ff0e8400-...",
-    "duration_ms": 3500,
-    "format": "mp3"
-  }
-}
-```
+**响应：** 直接返回 MP3 音频流（`Content-Type: audio/mpeg`），最大500字。
 
-注：也可以使用WebSocket流式传输音频，减少首字延迟。WebSocket接口地址：`wss://api.your-domain.com/v1/ai/tts/stream`
+发音人：讯飞 `xiaoyan`（女声）
 
 ---
 
 ### 8.4 语音识别（ASR）
 
 ```
-POST /ai/asr
+POST /voice/asr
 ```
 
-**请求体：** multipart/form-data
+**请求体：** `multipart/form-data`
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| audio | file | 音频文件（WAV/PCM，16kHz采样率） |
+| audio | file | 音频文件（m4a/wav，前端录音格式） |
+
+后端自动用 ffmpeg 将 m4a 转为 16kHz 单声道 PCM 后发给讯飞。
 
 **响应：**
 ```json
 {
   "code": 0,
+  "message": "ok",
   "data": {
-    "text": "做了十个",
-    "confidence": 0.95
+    "text": "做了十个"
+  }
+}
+```
+
+---
   }
 }
 ```

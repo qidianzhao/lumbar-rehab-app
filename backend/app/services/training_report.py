@@ -1,10 +1,15 @@
-"""训练完成率、时长与总结（规则模板，可替换为 LLM）。"""
+"""训练完成率、时长与总结。"""
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 from app.models.training import TrainingRecord
+
+logger = logging.getLogger(__name__)
+
+_BASE_SYSTEM_PROMPT = """你是"小核"，一位专业、友善的运动健身教练，专注于腰椎间盘突出康复期人群的核心力量训练指导。回复简短、口语化，不超过3句话。"""
 
 
 def calculate_completion_rate(records: list[TrainingRecord]) -> float:
@@ -31,8 +36,7 @@ def calculate_duration_seconds(started_at: datetime, ended_at: datetime) -> int:
         started_at = started_at.replace(tzinfo=timezone.utc)
     if ended_at.tzinfo is None:
         ended_at = ended_at.replace(tzinfo=timezone.utc)
-    delta = ended_at - started_at
-    return max(0, int(delta.total_seconds()))
+    return max(0, int((ended_at - started_at).total_seconds()))
 
 
 def format_duration_display(seconds: int) -> str:
@@ -46,7 +50,7 @@ def format_duration_display(seconds: int) -> str:
     return f"{s}秒"
 
 
-def generate_ai_summary(records: list[TrainingRecord], completion_rate: float) -> str:
+def _template_summary(records: list[TrainingRecord], completion_rate: float) -> str:
     done = sum(1 for r in records if r.is_completed and not r.is_skipped)
     skipped = sum(1 for r in records if r.is_skipped)
     total = len(records)
@@ -55,3 +59,24 @@ def generate_ai_summary(records: list[TrainingRecord], completion_rate: float) -
         f"其中完成 {done} 个，跳过 {skipped} 个。"
         "建议保持规律训练，优先保证动作质量与无痛范围。"
     )
+
+
+async def generate_ai_summary(records: list[TrainingRecord], completion_rate: float) -> str:
+    from app.services.deepseek_service import chat_fast
+
+    done = sum(1 for r in records if r.is_completed and not r.is_skipped)
+    skipped = sum(1 for r in records if r.is_skipped)
+    total = len(records)
+
+    user_prompt = (
+        f"用户刚完成训练：共{total}个动作，完成{done}个，跳过{skipped}个，完成率{completion_rate:.0f}%。"
+        "请用1-3句鼓励的话总结本次训练，口语化，不超过60字。"
+    )
+    try:
+        return await chat_fast([
+            {"role": "system", "content": _BASE_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ])
+    except Exception as e:
+        logger.warning("DeepSeek summary failed, using template: %s", e)
+        return _template_summary(records, completion_rate)

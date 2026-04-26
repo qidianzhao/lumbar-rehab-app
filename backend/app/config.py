@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     JPUSH_MASTER_SECRET: Optional[str] = None
     DAILY_FREE_CHAT_LIMIT: Optional[int] = None
     MAX_INPUT_LENGTH: Optional[int] = None
+    DEEPSEEK_API_KEY: Optional[str] = None
+    DEEPSEEK_BASE_URL: Optional[str] = None
+    DEEPSEEK_MODEL: Optional[str] = None
 
 
 settings = Settings()

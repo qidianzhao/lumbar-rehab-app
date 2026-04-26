@@ -219,7 +219,7 @@ async def finish_training_session(
     duration_sec = training_report.calculate_duration_seconds(started_utc, ended_at)
     records = list(sess.records)
     rate = training_report.calculate_completion_rate(records)
-    summary = training_report.generate_ai_summary(records, rate)
+    summary = await training_report.generate_ai_summary(records, rate)
 
     sess.ended_at = ended_at.replace(tzinfo=None)
     sess.duration_seconds = duration_sec

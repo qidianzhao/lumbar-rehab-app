@@ -147,15 +147,15 @@ export default function AssessmentResultScreen() {
       <View style={[styles.footer, { borderTopColor: theme.tabIconDefault, backgroundColor: theme.background }]}>
         <Pressable
           style={[styles.btnOutline, { borderColor: theme.tint }]}
-          onPress={() => router.push('/plan/generate' as Href)}
+          onPress={() => router.push('/assessment' as Href)}
         >
-          <Text style={[styles.btnOutlineText, { color: theme.tint }]}>生成训练计划</Text>
+          <Text style={[styles.btnOutlineText, { color: theme.tint }]}>重新测试</Text>
         </Pressable>
         <Pressable
           style={[styles.btn, { backgroundColor: theme.tint }]}
-          onPress={() => router.replace('/(tabs)' as unknown as Href)}
+          onPress={() => router.push('/plans/generate' as Href)}
         >
-          <Text style={styles.btnText}>返回首页</Text>
+          <Text style={styles.btnText}>生成训练计划</Text>
         </Pressable>
       </View>
     </View>

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.action import Action
 from app.models.training_plan import DayType, PlanDay, PlanExercise, PlanStatus, TrainingPlan
 from app.schemas.training_plan import PlanGenerateRequest
+
+logger = logging.getLogger(__name__)
 
 # 每周训练日：day_number 1=周一 … 7=周日
 _FREQ_TRAINING_DAYS: dict[int, list[int]] = {
@@ -24,6 +28,21 @@ _LEVEL_CONFIG: dict[str, dict[str, int | str]] = {
 }
 
 _WEEKDAY_CN = ["一", "二", "三", "四", "五", "六", "日"]
+
+
+async def _ai_plan_description(level: str, weekly_freq: int, duration: int, weeks: int) -> str:
+    from app.services.deepseek_service import chat_with_reasoning
+    level_cn = {"beginner": "入门", "intermediate": "进阶", "advanced": "强化"}.get(level, level)
+    prompt = (
+        f"为腰突康复用户生成一句训练计划描述（2-3句话，鼓励语气）：\n"
+        f"等级：{level_cn}，每周{weekly_freq}天，每次约{duration}分钟，共{weeks}周。\n"
+        "只输出描述文字，不要任何标题或格式。"
+    )
+    try:
+        return await chat_with_reasoning([{"role": "user", "content": prompt}])
+    except Exception as e:
+        logger.warning("DeepSeek plan description failed: %s", e)
+        return f"每周 {weekly_freq} 天训练，单次约 {duration} 分钟；结构为热身→核心→拉伸，共 {weeks} 周。"
 
 
 def _resolve_level(_request: PlanGenerateRequest) -> str:
@@ -93,10 +112,7 @@ async def generate_plan(
     if len(warmups) < 2 or len(cores) < 2 or len(stretches) < 2:
         raise ValueError("动作库数据不足，请先初始化动作库")
 
-    description = (
-        f"每周 {wf} 天训练，单次约 {request.preferred_duration} 分钟；"
-        f"结构为热身→核心→拉伸，共 {estimated_weeks} 周。"
-    )
+    description = await _ai_plan_description(level, wf, request.preferred_duration, estimated_weeks)
 
     plan = TrainingPlan(
         user_id=user_id,

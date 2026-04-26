@@ -166,7 +166,7 @@ async def submit_assessment(
             )
         )
 
-    result = assess_user(raw)
+    result = await assess_user(raw)
 
     assessment = Assessment(
         user_id=user_id,

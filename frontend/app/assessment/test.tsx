@@ -1,6 +1,7 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { type Href, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -15,6 +16,94 @@ import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import type { AssessmentTestItem, MetricType, TestItemSubmit } from '@/src/services/assessmentApi';
 import * as assessmentApi from '@/src/services/assessmentApi';
+import {
+  speakText,
+  startRecording,
+  stopRecordingAndRecognize,
+} from '@/src/services/voiceService';
+import { api } from '@/src/api/client';
+
+const AI_CHAT_URL = '/ai/chat';
+
+// ── 视频占位组件 ──────────────────────────────────────────────────────────────
+
+function ActionVideo({ videoUrl }: { videoUrl?: string | null }) {
+  const player = useVideoPlayer(videoUrl ?? null, (p) => { p.loop = true; });
+  useEffect(() => { if (videoUrl) player.play(); }, [videoUrl, player]);
+
+  if (!videoUrl) {
+    return (
+      <View style={styles.videoPlaceholder}>
+        <FontAwesome name="play-circle-o" size={40} color="#aaa" />
+        <Text style={styles.videoPlaceholderText}>暂无示范视频</Text>
+      </View>
+    );
+  }
+  return <VideoView player={player} style={styles.video} contentFit="contain" nativeControls={false} />;
+}
+
+// ── 秒表（平板支撑等计时类） ──────────────────────────────────────────────────
+
+function Stopwatch({ onCommit }: { onCommit: (seconds: number) => void }) {
+  const [running, setRunning] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (running) {
+      intervalRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+    } else {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    }
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [running]);
+
+  const toggle = () => {
+    if (running) {
+      setRunning(false);
+      onCommit(elapsed);
+    } else {
+      setElapsed(0);
+      setRunning(true);
+    }
+  };
+
+  const reset = () => { setRunning(false); setElapsed(0); };
+
+  return (
+    <View style={styles.stopwatch}>
+      <Text style={styles.stopwatchTime}>{elapsed} 秒</Text>
+      <View style={styles.stopwatchRow}>
+        <Pressable style={[styles.swBtn, { backgroundColor: running ? '#e53935' : '#2f95dc' }]} onPress={toggle}>
+          <Text style={styles.swBtnText}>{running ? '停止并记录' : elapsed > 0 ? '重新开始' : '开始计时'}</Text>
+        </Pressable>
+        {elapsed > 0 && !running && (
+          <Pressable style={[styles.swBtn, { backgroundColor: '#888' }]} onPress={reset}>
+            <Text style={styles.swBtnText}>重置</Text>
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ── 计数器（臀桥、鸟狗式等计次类） ──────────────────────────────────────────
+
+function Counter({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <View style={styles.counter}>
+      <Pressable style={styles.counterBtn} onPress={() => onChange(Math.max(0, value - 1))}>
+        <FontAwesome name="minus" size={20} color="#fff" />
+      </Pressable>
+      <Text style={styles.counterValue}>{value} 次</Text>
+      <Pressable style={[styles.counterBtn, { backgroundColor: '#2f95dc' }]} onPress={() => onChange(value + 1)}>
+        <FontAwesome name="plus" size={20} color="#fff" />
+      </Pressable>
+    </View>
+  );
+}
+
+// ── 主页面 ────────────────────────────────────────────────────────────────────
 
 function metricLabel(t: MetricType): string {
   if (t === 'seconds') return '秒';
@@ -29,11 +118,14 @@ export default function AssessmentTestScreen() {
 
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<AssessmentTestItem[]>([]);
+  const [videoUrls, setVideoUrls] = useState<Record<number, string | null>>({});
   const [error, setError] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
   const [values, setValues] = useState<Record<number, number>>({});
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [aiMessage, setAiMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,28 +134,36 @@ export default function AssessmentTestScreen() {
       setError(null);
       try {
         const list = await assessmentApi.getTestItems();
-        if (!cancelled) {
-          setItems(list);
-        }
+        if (cancelled) return;
+        setItems(list);
+        // 拉取每个动作的视频 URL
+        const urls: Record<number, string | null> = {};
+        await Promise.all(list.map(async (it) => {
+          try {
+            const res = await api.get<any>(`/actions/${it.action_id}`);
+            urls[it.action_id] = res.data?.video_url ?? null;
+          } catch { urls[it.action_id] = null; }
+        }));
+        if (!cancelled) setVideoUrls(urls);
       } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : '加载失败');
-        }
+        if (!cancelled) setError(e instanceof Error ? e.message : '加载失败');
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
+  // 动作切换时 TTS 播报
   const current = items[index];
+  useEffect(() => {
+    if (!current) return;
+    speakText(`第${index + 1}个动作：${current.name}，${current.prompt}`).catch(() => {});
+  }, [index, current]);
+
   const progress = items.length ? (index + 1) / items.length : 0;
-
   const currentValue = current ? values[current.action_id] : undefined;
-  const canNext = current ? typeof currentValue === 'number' && Number.isFinite(currentValue) : false;
-
+  const canNext = current ? typeof currentValue === 'number' && Number.isFinite(currentValue) && currentValue > 0 : false;
   const ratingOptions = useMemo(() => [1, 2, 3, 4, 5], []);
 
   function setCurrentValue(v: number) {
@@ -76,18 +176,66 @@ export default function AssessmentTestScreen() {
     setNotes((prev) => ({ ...prev, [current.action_id]: v }));
   }
 
+  // PTT 语音输入
+  const sendToAI = useCallback(async (text: string) => {
+    if (!current) return;
+    console.log('🎤 识别文字:', text);
+    setAiMessage(`你说：${text}`);
+    try {
+      const res = await api.post<{ code: number; data: { reply: string } }>(AI_CHAT_URL, {
+        messages: [{ role: 'user', content: text }],
+        context: { action_name: current.name, phase: 'assessment' },
+      });
+      console.log('AI 回复:', JSON.stringify(res.data));
+      const reply = res.data?.data?.reply ?? '';
+      if (reply) {
+        setAiMessage(reply);
+        await speakText(reply);
+      }
+    } catch (e) {
+      console.log('AI 对话错误:', e);
+    }
+  }, [current]);
+
+  const onMicPressIn = useCallback(async () => {
+    setIsRecording(true);
+    setAiMessage(null);
+    try { await startRecording(); }
+    catch (e) {
+      console.log('录音启动失败:', e);
+      setIsRecording(false);
+    }
+  }, []);
+
+  const onMicPressOut = useCallback(async () => {
+    if (!isRecording) return;
+    setIsRecording(false);
+    try {
+      const text = await stopRecordingAndRecognize();
+      if (text) {
+        await sendToAI(text);
+      } else {
+        setAiMessage('没听清，请再说一次');
+        await speakText('没听清，请再说一次');
+      }
+    } catch (e) {
+      console.log('识别错误:', e);
+      setAiMessage('识别失败，请重试');
+    }
+  }, [isRecording, sendToAI]);
+
   async function onSubmitAll() {
     if (items.length === 0) return;
     const payload: TestItemSubmit[] = items.map((it) => ({
       action_id: it.action_id,
       metric_value: values[it.action_id] ?? 0,
-      user_notes: notes[it.action_id] ? notes[it.action_id] : null,
+      user_notes: notes[it.action_id] || null,
     }));
     setSubmitting(true);
     setError(null);
     try {
       const report = await assessmentApi.submitAssessment({ items: payload });
-      router.replace((`/assessment/result?id=${report.id}` as unknown) as Href);
+      router.replace((`/assessment/result?id=${report.id}`) as unknown as Href);
     } catch (e) {
       setError(e instanceof Error ? e.message : '提交失败');
     } finally {
@@ -96,11 +244,7 @@ export default function AssessmentTestScreen() {
   }
 
   if (loading) {
-    return (
-      <View style={[styles.center, { backgroundColor: theme.background }]}>
-        <ActivityIndicator size="large" color={theme.tint} />
-      </View>
-    );
+    return <View style={[styles.center, { backgroundColor: theme.background }]}><ActivityIndicator size="large" color={theme.tint} /></View>;
   }
 
   if (error && items.length === 0) {
@@ -114,37 +258,33 @@ export default function AssessmentTestScreen() {
     );
   }
 
-  if (!current) {
-    return (
-      <View style={[styles.center, { backgroundColor: theme.background }]}>
-        <Text style={{ color: theme.text }}>无测试项目</Text>
-      </View>
-    );
-  }
-
-  const unit = metricLabel(current.metric_type);
+  if (!current) return <View style={[styles.center, { backgroundColor: theme.background }]}><Text style={{ color: theme.text }}>无测试项目</Text></View>;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={styles.content}>
+      {/* 进度条 */}
       <View style={styles.progressWrap}>
         <View style={[styles.progressBarBg, { backgroundColor: `${theme.tint}22` }]}>
           <View style={[styles.progressBarFill, { backgroundColor: theme.tint, width: `${progress * 100}%` }]} />
         </View>
-        <Text style={[styles.progressText, { color: theme.text }]}>
-          {index + 1} / {items.length}
-        </Text>
+        <Text style={[styles.progressText, { color: theme.text }]}>{index + 1} / {items.length}</Text>
       </View>
 
       <View style={[styles.card, { borderColor: theme.tabIconDefault }]}>
+        {/* 视频 */}
+        <ActionVideo videoUrl={videoUrls[current.action_id]} />
+
+        {/* 动作名 + 提示 */}
         <Text style={[styles.name, { color: theme.text }]}>{current.name}</Text>
         <Text style={[styles.prompt, { color: theme.text }]}>{current.prompt}</Text>
 
-        <View style={[styles.media, { borderColor: theme.tabIconDefault }]}>
-          <FontAwesome name="play-circle-o" size={40} color={theme.tabIconDefault} />
-          <Text style={[styles.mediaText, { color: theme.text }]}>视频/动图占位（后续接入）</Text>
-        </View>
-
-        {current.metric_type === 'rating_1_5' ? (
+        {/* 输入区 */}
+        {current.metric_type === 'seconds' ? (
+          <Stopwatch onCommit={setCurrentValue} />
+        ) : current.metric_type === 'reps' ? (
+          <Counter value={currentValue ?? 0} onChange={setCurrentValue} />
+        ) : (
+          // rating_1_5
           <View style={styles.chips}>
             {ratingOptions.map((n) => {
               const active = currentValue === n;
@@ -152,36 +292,16 @@ export default function AssessmentTestScreen() {
                 <Pressable
                   key={n}
                   onPress={() => setCurrentValue(n)}
-                  style={[
-                    styles.chip,
-                    {
-                      borderColor: active ? theme.tint : theme.tabIconDefault,
-                      backgroundColor: active ? `${theme.tint}22` : 'transparent',
-                    },
-                  ]}
+                  style={[styles.chip, { borderColor: active ? theme.tint : theme.tabIconDefault, backgroundColor: active ? `${theme.tint}22` : 'transparent' }]}
                 >
                   <Text style={{ color: active ? theme.tint : theme.text, fontWeight: '700' }}>{n}</Text>
                 </Pressable>
               );
             })}
           </View>
-        ) : (
-          <View style={styles.inputRow}>
-            <TextInput
-              value={typeof currentValue === 'number' ? String(currentValue) : ''}
-              onChangeText={(t) => setCurrentValue(Number(t))}
-              keyboardType="numeric"
-              placeholder={`请输入${unit}`}
-              placeholderTextColor="#999"
-              style={[
-                styles.input,
-                { borderColor: theme.tabIconDefault, color: theme.text },
-              ]}
-            />
-            <Text style={{ color: theme.text, opacity: 0.8, fontWeight: '700' }}>{unit}</Text>
-          </View>
         )}
 
+        {/* 备注 */}
         <TextInput
           value={notes[current.action_id] ?? ''}
           onChangeText={setCurrentNotes}
@@ -193,9 +313,24 @@ export default function AssessmentTestScreen() {
 
       {error ? <Text style={styles.err}>{error}</Text> : null}
 
+      {aiMessage ? (
+        <View style={styles.aiBubble}>
+          <Text style={styles.aiText}>{aiMessage}</Text>
+        </View>
+      ) : null}
+
+      {/* 导航行 */}
       <View style={styles.navRow}>
         <Pressable
-          style={[styles.btnOutline, { borderColor: theme.tint, opacity: index === 0 ? 0.5 : 1 }]}
+          style={[styles.iconBtn, { borderColor: theme.tabIconDefault }]}
+          onPressIn={() => void onMicPressIn()}
+          onPressOut={() => void onMicPressOut()}
+        >
+          <FontAwesome name="microphone" size={20} color={isRecording ? '#e53935' : theme.tabIconDefault} />
+        </Pressable>
+
+        <Pressable
+          style={[styles.btnOutline, { borderColor: theme.tint, opacity: index === 0 ? 0.4 : 1 }]}
           onPress={() => setIndex((i) => Math.max(0, i - 1))}
           disabled={index === 0}
         >
@@ -204,7 +339,7 @@ export default function AssessmentTestScreen() {
 
         {index < items.length - 1 ? (
           <Pressable
-            style={[styles.btn, { backgroundColor: theme.tint, opacity: canNext ? 1 : 0.6 }]}
+            style={[styles.btn, { backgroundColor: theme.tint, opacity: canNext ? 1 : 0.5 }]}
             onPress={() => setIndex((i) => Math.min(items.length - 1, i + 1))}
             disabled={!canNext}
           >
@@ -212,11 +347,11 @@ export default function AssessmentTestScreen() {
           </Pressable>
         ) : (
           <Pressable
-            style={[styles.btn, { backgroundColor: theme.tint, opacity: canNext && !submitting ? 1 : 0.6 }]}
+            style={[styles.btn, { backgroundColor: theme.tint, opacity: canNext && !submitting ? 1 : 0.5 }]}
             onPress={onSubmitAll}
             disabled={!canNext || submitting}
           >
-            <Text style={styles.btnText}>{submitting ? '提交中…' : '提交评估'}</Text>
+            {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>提交评估</Text>}
           </Pressable>
         )}
       </View>
@@ -231,28 +366,30 @@ const styles = StyleSheet.create({
   progressBarBg: { height: 10, borderRadius: 999, overflow: 'hidden' },
   progressBarFill: { height: 10, borderRadius: 999 },
   progressText: { fontSize: 13, opacity: 0.8 },
-  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 14 },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 14, marginBottom: 12 },
+  video: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000', borderRadius: 10, marginBottom: 12 },
+  videoPlaceholder: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#111', borderRadius: 10, alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12 },
+  videoPlaceholderText: { color: '#aaa', fontSize: 13 },
   name: { fontSize: 18, fontWeight: '800', marginBottom: 6 },
-  prompt: { fontSize: 14, opacity: 0.85, marginBottom: 12, lineHeight: 20 },
-  media: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 14,
-  },
-  mediaText: { fontSize: 13, opacity: 0.75 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
+  prompt: { fontSize: 14, opacity: 0.85, marginBottom: 14, lineHeight: 20 },
+  stopwatch: { alignItems: 'center', gap: 10, marginBottom: 14 },
+  stopwatchTime: { fontSize: 48, fontWeight: '900', color: '#2f95dc' },
+  stopwatchRow: { flexDirection: 'row', gap: 10 },
+  swBtn: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 10 },
+  swBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  counter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginBottom: 14 },
+  counterBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#888', alignItems: 'center', justifyContent: 'center' },
+  counterValue: { fontSize: 32, fontWeight: '900', color: '#2f95dc', minWidth: 100, textAlign: 'center' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
   chip: { borderWidth: 1, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, minWidth: 48, alignItems: 'center' },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  input: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, fontSize: 16 },
   notes: { borderWidth: 1, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, fontSize: 14, marginTop: 4 },
-  navRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  btn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  navRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  iconBtn: { width: 48, height: 48, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  btn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', minHeight: 48 },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
   btnOutline: { flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1, alignItems: 'center' },
   btnOutlineText: { fontSize: 16, fontWeight: '800' },
-  err: { color: '#c62828', marginTop: 12, textAlign: 'center' },
+  err: { color: '#c62828', marginTop: 8, textAlign: 'center' },
+  aiBubble: { backgroundColor: 'rgba(47,149,220,0.1)', borderRadius: 10, padding: 10, marginBottom: 8 },
+  aiText: { fontSize: 14, color: '#2f95dc', lineHeight: 20 },
 });

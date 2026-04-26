@@ -1,0 +1,67 @@
+import json
+from pathlib import Path
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.models.action import Action
+
+router = APIRouter()
+
+_MAPPING_FILE = Path(__file__).parent.parent.parent.parent.parent / "video_mapping.json"
+
+
+def _load_mapping() -> dict[str, str]:
+    if _MAPPING_FILE.exists():
+        return json.loads(_MAPPING_FILE.read_text(encoding="utf-8"))
+    return {}
+
+
+class ActionOut(BaseModel):
+    id: int
+    name: str
+    phase: str
+    difficulty_level: int
+    description: str | None
+    video_url: str | None
+
+    model_config = {"from_attributes": True}
+
+
+@router.get("", response_model=list[ActionOut])
+async def list_actions(db: AsyncSession = Depends(get_db)):
+    mapping = _load_mapping()
+    rows = (await db.execute(select(Action).order_by(Action.phase, Action.difficulty_level))).scalars().all()
+    result = []
+    for row in rows:
+        video_url = row.video_url or mapping.get(row.name)
+        result.append(ActionOut(
+            id=row.id,
+            name=row.name,
+            phase=row.phase,
+            difficulty_level=row.difficulty_level,
+            description=row.description,
+            video_url=video_url,
+        ))
+    return result
+
+
+@router.get("/{action_id}", response_model=ActionOut)
+async def get_action(action_id: int, db: AsyncSession = Depends(get_db)):
+    mapping = _load_mapping()
+    row = (await db.execute(select(Action).where(Action.id == action_id))).scalar_one_or_none()
+    if row is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="动作不存在")
+    video_url = row.video_url or mapping.get(row.name)
+    return ActionOut(
+        id=row.id,
+        name=row.name,
+        phase=row.phase,
+        difficulty_level=row.difficulty_level,
+        description=row.description,
+        video_url=video_url,
+    )

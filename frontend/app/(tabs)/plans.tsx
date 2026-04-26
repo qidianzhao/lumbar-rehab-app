@@ -89,7 +89,7 @@ export default function PlansScreen() {
           </Text>
           <Pressable
             style={[styles.btn, { backgroundColor: theme.tint, marginTop: 20 }]}
-            onPress={() => router.push('/plan/generate' as Href)}
+            onPress={() => router.push('/plans/generate' as Href)}
           >
             <Text style={styles.btnText}>生成训练计划</Text>
           </Pressable>
@@ -159,7 +159,7 @@ export default function PlansScreen() {
         >
           <Pressable
             style={[styles.btnOutline, { borderColor: theme.tint }]}
-            onPress={() => router.push('/plan/generate' as Href)}
+            onPress={() => router.push('/plans/generate' as Href)}
           >
             <Text style={[styles.btnOutlineText, { color: theme.tint }]}>生成新计划</Text>
           </Pressable>

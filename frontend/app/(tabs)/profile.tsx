@@ -1,11 +1,13 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { type Href, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useAuthStore } from '@/src/stores/authStore';
+import { getLatest } from '@/src/services/assessmentApi';
 
 type MenuItem = {
   icon: React.ComponentProps<typeof FontAwesome>['name'];
@@ -28,6 +30,11 @@ export default function TabProfileScreen() {
 
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const [hasAssessment, setHasAssessment] = useState(true);
+
+  useEffect(() => {
+    getLatest().then((r) => setHasAssessment(!!r)).catch(() => {});
+  }, []);
 
   const onLogout = () => {
     Alert.alert('退出登录', '确定要退出吗？', [
@@ -147,9 +154,14 @@ export default function TabProfileScreen() {
                       <FontAwesome name={item.icon} size={16} color={item.disabled ? theme.tabIconDefault : theme.tint} />
                     </View>
                     <View style={styles.menuText}>
-                      <Text style={[styles.menuLabel, { color: item.disabled ? theme.tabIconDefault : theme.text }]}>
-                        {item.label}
-                      </Text>
+                      <View style={styles.labelRow}>
+                        <Text style={[styles.menuLabel, { color: item.disabled ? theme.tabIconDefault : theme.text }]}>
+                          {item.label}
+                        </Text>
+                        {item.label === '体能测试' && !hasAssessment && (
+                          <View style={styles.redDot} />
+                        )}
+                      </View>
                       {item.sub && (
                         <Text style={[styles.menuSub, { color: theme.text }]}>{item.sub}</Text>
                       )}
@@ -213,7 +225,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   menuText: { flex: 1, gap: 2 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   menuLabel: { fontSize: 15, fontWeight: '600' },
   menuSub: { fontSize: 12, opacity: 0.5 },
+  redDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#e53935' },
   divider: { height: StyleSheet.hairlineWidth, marginLeft: 60 },
 });
