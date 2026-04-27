@@ -20,6 +20,8 @@ import {
   speakText,
   startRecording,
   stopRecordingAndRecognize,
+  startBgMusic,
+  stopBgMusic,
 } from '@/src/services/voiceService';
 import { api } from '@/src/api/client';
 
@@ -27,10 +29,7 @@ const AI_CHAT_URL = '/ai/chat';
 
 // ── 视频占位组件 ──────────────────────────────────────────────────────────────
 
-function ActionVideo({ videoUrl }: { videoUrl?: string | null }) {
-  const player = useVideoPlayer(videoUrl ?? null, (p) => { p.loop = true; });
-  useEffect(() => { if (videoUrl) player.play(); }, [videoUrl, player]);
-
+function ActionVideo({ player, videoUrl }: { player: ReturnType<typeof useVideoPlayer>; videoUrl?: string | null }) {
   if (!videoUrl) {
     return (
       <View style={styles.videoPlaceholder}>
@@ -127,6 +126,11 @@ export default function AssessmentTestScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [aiMessage, setAiMessage] = useState<string | null>(null);
 
+  const current = items[index];
+  const currentVideoUrl = current ? (videoUrls[current.action_id] ?? null) : null;
+  const player = useVideoPlayer(null, (p) => { p.loop = true; p.muted = true; });
+
+  // 数据加载
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -136,7 +140,6 @@ export default function AssessmentTestScreen() {
         const list = await assessmentApi.getTestItems();
         if (cancelled) return;
         setItems(list);
-        // 拉取每个动作的视频 URL
         const urls: Record<number, string | null> = {};
         await Promise.all(list.map(async (it) => {
           try {
@@ -154,12 +157,25 @@ export default function AssessmentTestScreen() {
     return () => { cancelled = true; };
   }, []);
 
-  // 动作切换时 TTS 播报
-  const current = items[index];
+  // 页面挂载时启动背景音乐，卸载时停止
+  useEffect(() => {
+    startBgMusic('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3').catch(() => {});
+    return () => { stopBgMusic().catch(() => {}); };
+  }, []);
+
+  // 视频源变化时换源
+  useEffect(() => {
+    if (currentVideoUrl) player.replace({ uri: currentVideoUrl });
+  }, [currentVideoUrl]);
+
+  // 动作切换时 TTS 播报，播完后播放视频
   useEffect(() => {
     if (!current) return;
-    speakText(`第${index + 1}个动作：${current.name}，${current.prompt}`).catch(() => {});
-  }, [index, current]);
+    player.pause();
+    speakText(`第${index + 1}个动作：${current.name}，${current.prompt}`)
+      .then(() => { if (currentVideoUrl) player.play(); })
+      .catch(() => { if (currentVideoUrl) player.play(); });
+  }, [index]);
 
   const progress = items.length ? (index + 1) / items.length : 0;
   const currentValue = current ? values[current.action_id] : undefined;
@@ -272,7 +288,7 @@ export default function AssessmentTestScreen() {
 
       <View style={[styles.card, { borderColor: theme.tabIconDefault }]}>
         {/* 视频 */}
-        <ActionVideo videoUrl={videoUrls[current.action_id]} />
+        <ActionVideo player={player} videoUrl={videoUrls[current.action_id]} />
 
         {/* 动作名 + 提示 */}
         <Text style={[styles.name, { color: theme.text }]}>{current.name}</Text>

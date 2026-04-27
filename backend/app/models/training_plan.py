@@ -85,6 +85,7 @@ class PlanExercise(Base):
     sets: Mapped[int] = mapped_column(Integer, nullable=False)
     reps: Mapped[int] = mapped_column(Integer, nullable=False)
     rest_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    set_duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     plan_day: Mapped["PlanDay"] = relationship("PlanDay", back_populates="exercises")

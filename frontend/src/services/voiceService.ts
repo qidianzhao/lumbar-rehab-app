@@ -7,25 +7,51 @@ const ASR_URL = '/voice/asr';
 
 let _recording: Audio.Recording | null = null;
 let _sound: Audio.Sound | null = null;
+let _bgMusic: Audio.Sound | null = null;
 let _speaking = false;
 
-async function _ensureAudioPermission(): Promise<boolean> {
-  const { status } = await Audio.requestPermissionsAsync();
-  return status === 'granted';
+async function _ensureAudioMode(recording: boolean) {
+  await Audio.setAudioModeAsync({
+    allowsRecordingIOS: recording,
+    playsInSilentModeIOS: true,
+    staysActiveInBackground: false,
+  });
+}
+
+export async function startBgMusic(uri: string): Promise<void> {
+  await stopBgMusic();
+  await _ensureAudioMode(false);
+  const { sound } = await Audio.Sound.createAsync(
+    { uri },
+    { shouldPlay: true, isLooping: true, volume: 0.4 }
+  );
+  _bgMusic = sound;
+}
+
+export async function stopBgMusic(): Promise<void> {
+  if (_bgMusic) {
+    await _bgMusic.stopAsync().catch(() => {});
+    await _bgMusic.unloadAsync().catch(() => {});
+    _bgMusic = null;
+  }
+}
+
+export async function pauseBgMusic(): Promise<void> {
+  if (_bgMusic) await _bgMusic.pauseAsync().catch(() => {});
+}
+
+export async function resumeBgMusic(): Promise<void> {
+  if (_bgMusic) await _bgMusic.playAsync().catch(() => {});
 }
 
 export async function startRecording(): Promise<void> {
   if (_recording) return;
-  const granted = await _ensureAudioPermission();
-  if (!granted) throw new Error('麦克风权限未授权');
+  const { status } = await Audio.requestPermissionsAsync();
+  if (status !== 'granted') throw new Error('麦克风权限未授权');
 
-  await Audio.setAudioModeAsync({
-    allowsRecordingIOS: true,
-    playsInSilentModeIOS: true,
-  });
+  await pauseBgMusic();
+  await _ensureAudioMode(true);
 
-  // 使用 HIGH_QUALITY preset — iOS 录 WAV，Android 录 AAC/m4a
-  // 后端统一用 ffmpeg-free 方式处理，或直接发原始文件让讯飞处理
   const { recording } = await Audio.Recording.createAsync(
     Audio.RecordingOptionsPresets.HIGH_QUALITY
   );
@@ -68,13 +94,14 @@ export async function stopRecordingAndRecognize(): Promise<string> {
     _recording = null;
     return '';
   } finally {
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+    await _ensureAudioMode(false);
   }
 }
 
 export async function speakText(text: string): Promise<void> {
   if (!text.trim()) return;
   stopSpeaking();
+  await pauseBgMusic();
 
   try {
     const token = (api.defaults.headers.common['Authorization'] as string) ?? '';
@@ -85,11 +112,11 @@ export async function speakText(text: string): Promise<void> {
       body: JSON.stringify({ text }),
     });
     console.log('TTS 响应状态:', response.status, 'content-type:', response.headers.get('content-type'));
-    if (!response.ok) { console.log('TTS 失败'); return; }
+    if (!response.ok) { console.log('TTS 失败'); await resumeBgMusic(); return; }
 
     const arrayBuffer = await response.arrayBuffer();
     console.log('TTS 音频大小:', arrayBuffer.byteLength);
-    if (arrayBuffer.byteLength === 0) { console.log('TTS 音频为空'); return; }
+    if (arrayBuffer.byteLength === 0) { console.log('TTS 音频为空'); await resumeBgMusic(); return; }
 
     const bytes = new Uint8Array(arrayBuffer);
     let binary = '';
@@ -99,15 +126,10 @@ export async function speakText(text: string): Promise<void> {
     }
     const base64 = btoa(binary);
     const tmpPath = FileSystem.cacheDirectory + `tts_${Date.now()}.mp3`;
-    await FileSystem.writeAsStringAsync(tmpPath, base64, {
-      encoding: 'base64' as any,
-    });
+    await FileSystem.writeAsStringAsync(tmpPath, base64, { encoding: 'base64' as any });
     console.log('TTS 文件写入:', tmpPath);
 
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-    });
+    await _ensureAudioMode(false);
 
     const { sound } = await Audio.Sound.createAsync(
       { uri: tmpPath },
@@ -117,17 +139,22 @@ export async function speakText(text: string): Promise<void> {
     _speaking = true;
     console.log('TTS 开始播放');
 
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (status.isLoaded && status.didJustFinish) {
-        console.log('TTS 播放完成');
-        _speaking = false;
-        sound.unloadAsync().catch(() => {});
-        FileSystem.deleteAsync(tmpPath, { idempotent: true }).catch(() => {});
-      }
+    await new Promise<void>((resolve) => {
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          console.log('TTS 播放完成');
+          _speaking = false;
+          sound.unloadAsync().catch(() => {});
+          FileSystem.deleteAsync(tmpPath, { idempotent: true }).catch(() => {});
+          resolve();
+        }
+      });
     });
   } catch (e) {
     console.log('TTS 错误:', e);
     _speaking = false;
+  } finally {
+    await resumeBgMusic();
   }
 }
 

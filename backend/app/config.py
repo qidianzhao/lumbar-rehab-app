@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     DEEPSEEK_API_KEY: Optional[str] = None
     DEEPSEEK_BASE_URL: Optional[str] = None
     DEEPSEEK_MODEL: Optional[str] = None
+    VIDEO_SERVER_URL: Optional[str] = "http://localhost:8080"
 
 
 settings = Settings()

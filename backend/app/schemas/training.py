@@ -59,6 +59,7 @@ class SessionStartActionItem(BaseModel):
     planned_sets: int
     planned_reps: int
     rest_seconds: int
+    set_duration_seconds: int = 30
     video_url: str | None = None
     tips: str | None = None
 

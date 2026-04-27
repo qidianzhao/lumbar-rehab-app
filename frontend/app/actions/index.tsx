@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native'
 import { useRouter } from 'expo-router'
 
-const API = 'http://192.168.5.119:8000/api/v1'
+const API = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000/api/v1'
 
 const PHASE_LABEL: Record<string, string> = {
   warmup: '热身',

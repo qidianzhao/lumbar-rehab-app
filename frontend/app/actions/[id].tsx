@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from 'react-nat
 import { useLocalSearchParams } from 'expo-router'
 import { VideoView, useVideoPlayer } from 'expo-video'
 
-const API = 'http://192.168.5.119:8000/api/v1'
+const API = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000/api/v1'
 
 const PHASE_LABEL: Record<string, string> = {
   warmup: '热身',

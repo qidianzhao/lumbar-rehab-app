@@ -13,6 +13,7 @@ from app.models.action import Action
 from app.models.checkin import Checkin
 from app.models.training import PainLog, PreCheckStatus, SessionStatus, TrainingRecord, TrainingSession
 from app.models.training_plan import PlanDay, PlanExercise, TrainingPlan
+from app.api.v1.endpoints.actions import _build_video_url, _load_mapping
 from app.schemas.common import APIResponse
 from app.schemas.training import (
     RecordSubmitRequest,
@@ -113,6 +114,7 @@ async def create_training_session(
     action_ids = list({e.action_id for e in exercises})
     actions = (await db.execute(select(Action).where(Action.id.in_(action_ids)))).scalars().all()
     actions_by_id = {a.id: a for a in actions}
+    video_mapping = _load_mapping()
 
     action_items: list[SessionStartActionItem] = []
     for pe in exercises:
@@ -140,7 +142,8 @@ async def create_training_session(
                 planned_sets=pe.sets,
                 planned_reps=pe.reps,
                 rest_seconds=pe.rest_seconds,
-                video_url=act.video_url,
+                set_duration_seconds=pe.set_duration_seconds,
+                video_url=_build_video_url(act.video_url or video_mapping.get(act.name)),
                 tips=act.description,
             )
         )

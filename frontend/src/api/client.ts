@@ -4,8 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { STORAGE_KEYS } from '@/src/constants/authStorage';
 
 function resolveBaseUrl(): string {
-  // 临时硬编码，绕过环境变量测试
-  return 'http://192.168.5.119:8000/api/v1';
+  return process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000/api/v1';
 }
 
 export const api = axios.create({

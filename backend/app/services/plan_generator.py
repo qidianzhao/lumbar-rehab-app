@@ -60,16 +60,16 @@ def _warmup_core_stretch_counts(preferred_duration: int) -> tuple[int, int, int]
     return (3, 4, 3)
 
 
-def _sets_reps_rest(level: str, preferred_duration: int) -> tuple[int, int, int]:
+def _sets_reps_rest(level: str, preferred_duration: int) -> tuple[int, int, int, int]:
     if level == "intermediate":
-        sets, reps, rest = 3, 12, 40
+        sets, reps, rest, duration = 3, 12, 12, 40
     elif level == "advanced":
-        sets, reps, rest = 3, 15, 35
+        sets, reps, rest, duration = 3, 15, 10, 35
     else:
-        sets, reps, rest = 2, 10, 45
+        sets, reps, rest, duration = 2, 10, 15, 30
     if preferred_duration >= 35:
         reps += 2
-    return sets, reps, rest
+    return sets, reps, rest, duration
 
 
 async def _load_actions_for_phase(
@@ -103,7 +103,7 @@ async def generate_plan(
     wf = request.weekly_frequency
     training_days = _FREQ_TRAINING_DAYS.get(wf, _FREQ_TRAINING_DAYS[3])
     w_need, c_need, s_need = _warmup_core_stretch_counts(request.preferred_duration)
-    sets, reps, rest_sec = _sets_reps_rest(level, request.preferred_duration)
+    sets, reps, rest_sec, set_dur = _sets_reps_rest(level, request.preferred_duration)
 
     warmups = await _load_actions_for_phase(session, "warmup", w_need, max_difficulty)
     cores = await _load_actions_for_phase(session, "core", c_need, max_difficulty)
@@ -156,6 +156,7 @@ async def generate_plan(
                         sets=sets,
                         reps=reps,
                         rest_seconds=rest_sec,
+                        set_duration_seconds=set_dur,
                         sort_order=sort_order,
                     )
                 )
@@ -170,6 +171,7 @@ async def generate_plan(
                         sets=sets,
                         reps=reps,
                         rest_seconds=rest_sec,
+                        set_duration_seconds=set_dur,
                         sort_order=sort_order,
                     )
                 )
@@ -184,6 +186,7 @@ async def generate_plan(
                         sets=sets,
                         reps=reps,
                         rest_seconds=rest_sec,
+                        set_duration_seconds=set_dur,
                         sort_order=sort_order,
                     )
                 )

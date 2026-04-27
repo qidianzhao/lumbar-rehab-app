@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends
@@ -6,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.action import Action
 
@@ -18,6 +20,15 @@ def _load_mapping() -> dict[str, str]:
     if _MAPPING_FILE.exists():
         return json.loads(_MAPPING_FILE.read_text(encoding="utf-8"))
     return {}
+
+
+def _build_video_url(path: str | None) -> str | None:
+    if not path:
+        return None
+    if path.startswith("http"):
+        return path
+    base = (settings.VIDEO_SERVER_URL or "http://localhost:8080").rstrip("/")
+    return f"{base}{path}"
 
 
 class ActionOut(BaseModel):
@@ -37,7 +48,7 @@ async def list_actions(db: AsyncSession = Depends(get_db)):
     rows = (await db.execute(select(Action).order_by(Action.phase, Action.difficulty_level))).scalars().all()
     result = []
     for row in rows:
-        video_url = row.video_url or mapping.get(row.name)
+        video_url = _build_video_url(row.video_url or mapping.get(row.name))
         result.append(ActionOut(
             id=row.id,
             name=row.name,
@@ -56,7 +67,7 @@ async def get_action(action_id: int, db: AsyncSession = Depends(get_db)):
     if row is None:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="动作不存在")
-    video_url = row.video_url or mapping.get(row.name)
+    video_url = _build_video_url(row.video_url or mapping.get(row.name))
     return ActionOut(
         id=row.id,
         name=row.name,

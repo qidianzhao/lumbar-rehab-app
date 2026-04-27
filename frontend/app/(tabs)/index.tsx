@@ -7,8 +7,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import * as planApi from '@/src/services/planApi';
-import * as trainingApi from '@/src/services/trainingApi';
-import { useTrainingStore } from '@/src/stores/trainingStore';
 
 const PHASE_LABEL: Record<string, string> = {
   warmup: '热身', core: '核心', stretch: '拉伸',
@@ -18,11 +16,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
-  const hydrateFromSession = useTrainingStore((s) => s.hydrateFromSession);
-
   const [plan, setPlan] = useState<planApi.TrainingPlan | null | undefined>(undefined);
-  const [starting, setStarting] = useState(false);
-  const [startError, setStartError] = useState<string | null>(null);
 
   useFocusEffect(useCallback(() => {
     let cancelled = false;
@@ -42,21 +36,7 @@ export default function HomeScreen() {
 
   async function onStartTraining() {
     if (!plan || !todayDay) return;
-    setStarting(true);
-    setStartError(null);
-    try {
-      const session = await trainingApi.createSession({
-        plan_id: plan.id,
-        plan_day_id: todayDay.id,
-        pre_check_status: 'normal',
-      });
-      hydrateFromSession(session);
-      router.push('/training/pre-check' as Href);
-    } catch (e) {
-      setStartError(e instanceof Error ? e.message : '开始失败');
-    } finally {
-      setStarting(false);
-    }
+    router.push(`/training/pre-check?planId=${plan.id}&planDayId=${todayDay.id}` as Href);
   }
 
   return (
@@ -113,17 +93,11 @@ export default function HomeScreen() {
               );
             })}
 
-            {startError ? <Text style={styles.err}>{startError}</Text> : null}
-
             <Pressable
-              style={[styles.startBtn, { backgroundColor: theme.tint, opacity: starting ? 0.7 : 1 }]}
+              style={[styles.startBtn, { backgroundColor: theme.tint }]}
               onPress={() => void onStartTraining()}
-              disabled={starting}
             >
-              {starting
-                ? <ActivityIndicator color="#fff" />
-                : <><FontAwesome name="play" size={14} color="#fff" /><Text style={styles.startBtnText}>开始训练</Text></>
-              }
+              <FontAwesome name="play" size={14} color="#fff" /><Text style={styles.startBtnText}>开始训练</Text>
             </Pressable>
           </View>
         )}
@@ -209,5 +183,4 @@ const styles = StyleSheet.create({
   btnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   btnOutline: { paddingVertical: 11, paddingHorizontal: 18, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
   btnOutlineText: { fontSize: 14, fontWeight: '700' },
-  err: { color: '#c62828', fontSize: 13, marginTop: 6, textAlign: 'center' },
 });

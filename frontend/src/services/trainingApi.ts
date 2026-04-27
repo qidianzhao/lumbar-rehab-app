@@ -29,6 +29,7 @@ export interface SessionStartAction {
   planned_sets: number;
   planned_reps: number;
   rest_seconds: number;
+  set_duration_seconds: number;
   video_url: string | null;
   tips: string | null;
 }
