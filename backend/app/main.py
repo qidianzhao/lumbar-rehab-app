@@ -17,6 +17,7 @@ async def lifespan(app: FastAPI):
     import app.models.training  # noqa: F401
     import app.models.checkin  # noqa: F401
     import app.models.health_profile  # noqa: F401
+    import app.models.ai_usage  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

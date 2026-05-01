@@ -81,6 +81,23 @@ export default function TabProfileScreen() {
       ],
     },
     {
+      title: 'AI助手',
+      items: [
+        {
+          icon: 'comments',
+          label: 'AI问答助手',
+          sub: '每日15次免费对话',
+          href: '/chat' as Href,
+        },
+        {
+          icon: 'bar-chart',
+          label: 'AI用量统计',
+          sub: '查看使用情况',
+          href: '/usage' as Href,
+        },
+      ],
+    },
+    {
       title: '个人资料',
       items: [
         {
@@ -100,6 +117,12 @@ export default function TabProfileScreen() {
     {
       title: '设置',
       items: [
+        {
+          icon: 'cloud-download',
+          label: '离线模式',
+          sub: '视频下载与数据同步',
+          href: '/profile/offline' as Href,
+        },
         {
           icon: 'cog',
           label: '应用设置',

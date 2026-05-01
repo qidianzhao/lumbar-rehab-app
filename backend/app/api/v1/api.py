@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import actions, ai, assessment, checkin, export, plans, share, training, users, voice
+from app.api.v1.endpoints import actions, ai, assessment, checkin, export, plans, share, sync, training, users, voice
 
 api_router = APIRouter()
 api_router.include_router(actions.router, prefix="/actions", tags=["动作库"])
@@ -13,3 +13,4 @@ api_router.include_router(checkin.router, prefix="/checkin", tags=["打卡记录
 api_router.include_router(users.router, prefix="/users", tags=["用户"])
 api_router.include_router(export.router, prefix="/export", tags=["数据导出"])
 api_router.include_router(share.router, prefix="/share", tags=["社交分享"])
+api_router.include_router(sync.router, prefix="/sync", tags=["数据同步"])
