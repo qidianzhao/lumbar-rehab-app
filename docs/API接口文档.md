@@ -1,7 +1,7 @@
 # 腰突康复运动App — API接口文档
 
-**文档版本：** v1.1
-**日期：** 2026年4月27日
+**文档版本：** v1.2
+**日期：** 2026年5月1日
 **配套文档：** PRD v1.0、技术方案文档 v1.1、数据库设计文档 v1.0
 **Base URL：** `http://192.168.5.119:8000/api/v1`（开发环境）
 **认证方式：** Bearer Token（JWT）
@@ -866,6 +866,8 @@ POST /ai/chat
 
 模型：`deepseek-chat`（快速响应，适合训练中实时互动）
 
+**说明：** 训练中对话不限制次数，但会记录token用量用于统计。
+
 ---
 
 ### 8.2 自由问答（非训练时段）
@@ -896,9 +898,89 @@ POST /ai/free-chat
 
 模型：`deepseek-chat`
 
+**限制：** 每用户每日15次免费对话，超出后返回429错误。单次输入最多200字符。
+
 ---
 
-### 8.3 语音合成（TTS）
+### 8.3 获取今日免费对话剩余次数
+
+```
+GET /ai/usage-limit
+```
+
+**响应：**
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "allowed": true,
+    "used": 8,
+    "limit": 15,
+    "remaining": 7
+  }
+}
+```
+
+**字段说明：**
+- `allowed`: 是否还可以继续对话
+- `used`: 今日已使用次数
+- `limit`: 每日限制次数
+- `remaining`: 今日剩余次数
+
+---
+
+### 8.4 获取用户AI用量统计
+
+```
+GET /ai/usage-stats?days=7
+```
+
+**查询参数：**
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| days | int | 否 | 7 | 统计最近N天的数据 |
+
+**响应：**
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "total_calls": 45,
+    "total_input_tokens": 12500,
+    "total_output_tokens": 8300,
+    "by_type": {
+      "free_chat": 12,
+      "training_chat": 28,
+      "assessment": 3,
+      "plan_generation": 2
+    },
+    "daily": [
+      { "date": "2026-04-25", "count": 5 },
+      { "date": "2026-04-26", "count": 8 },
+      { "date": "2026-04-27", "count": 6 },
+      { "date": "2026-04-28", "count": 7 },
+      { "date": "2026-04-29", "count": 9 },
+      { "date": "2026-04-30", "count": 6 },
+      { "date": "2026-05-01", "count": 4 }
+    ]
+  }
+}
+```
+
+**字段说明：**
+- `total_calls`: 总调用次数
+- `total_input_tokens`: 总输入token数（包含系统提示词）
+- `total_output_tokens`: 总输出token数
+- `by_type`: 按用途分类的调用次数统计
+- `daily`: 每日调用次数明细
+
+**Token计算说明：** 采用字符数×2的简化估算（1个中文字符≈2个token），输入token包含系统提示词以反映真实API成本。
+
+---
+
+### 8.5 语音合成（TTS）
 
 ```
 POST /voice/tts
@@ -917,7 +999,7 @@ POST /voice/tts
 
 ---
 
-### 8.4 语音识别（ASR）
+### 8.6 语音识别（ASR）
 
 ```
 POST /voice/asr
@@ -1230,3 +1312,5 @@ GET /sync/pull?last_sync_at=2026-04-10T00:00:00Z
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
 | v1.0 | 2026-04-12 | 初始版本，覆盖全部MVP接口 |
+| v1.1 | 2026-04-27 | 更新视频服务器IP配置 |
+| v1.2 | 2026-05-01 | 新增AI用量统计接口（M11功能） |

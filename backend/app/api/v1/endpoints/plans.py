@@ -11,6 +11,7 @@ from app.schemas.common import APIResponse
 from app.schemas.training_plan import PlanDayResponse, PlanExerciseResponse, PlanGenerateRequest, TrainingPlanResponse
 from app.services import plan_generator
 from app.services.action_seed import ensure_actions_seeded
+from app.services.ai_usage_service import record_usage
 
 router = APIRouter()
 
@@ -73,6 +74,14 @@ async def generate_training_plan(
     await ensure_actions_seeded(db)
     try:
         plan = await plan_generator.generate_plan(user_id, body, session=db)
+        # 记录AI用量（计划生成）
+        await record_usage(
+            user_id=user_id,
+            usage_type="plan_generation",
+            input_tokens=0,
+            output_tokens=0,
+            db=db,
+        )
         await db.commit()
     except ValueError as e:
         await db.rollback()

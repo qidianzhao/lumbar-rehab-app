@@ -18,6 +18,7 @@ from app.schemas.assessment import (
 from app.schemas.common import APIResponse
 from app.services.action_seed import ensure_actions_seeded
 from app.services.assessment_service import assess_user
+from app.services.ai_usage_service import record_usage
 
 router = APIRouter()
 
@@ -182,6 +183,15 @@ async def submit_assessment(
     for item in items_to_save:
         item.assessment_id = assessment.id
         db.add(item)
+
+    # 记录AI用量（体能评估）
+    await record_usage(
+        user_id=user_id,
+        usage_type="assessment",
+        input_tokens=0,
+        output_tokens=0,
+        db=db,
+    )
 
     await db.commit()
 

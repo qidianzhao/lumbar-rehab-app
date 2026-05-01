@@ -1,4 +1,5 @@
 import { api } from '@/src/api/client';
+import * as offlineService from './offlineService';
 
 export interface ApiEnvelope<T> {
   code: number;
@@ -111,7 +112,12 @@ export async function submitRecord(sessionId: number, data: RecordSubmitBody): P
 
 export async function finishSession(sessionId: number): Promise<SessionFinishData> {
   const res = await api.post<ApiEnvelope<SessionFinishData>>(`/training/sessions/${sessionId}/finish`);
-  return unwrap(res.data);
+  const result = unwrap(res.data);
+
+  // 联网后自动同步离线数据
+  void offlineService.autoSync().catch(console.error);
+
+  return result;
 }
 
 export async function getSessionHistory(page = 1, pageSize = 20): Promise<SessionHistoryData> {

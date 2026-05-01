@@ -26,6 +26,7 @@ from app.schemas.training import (
     SessionStartResponse,
 )
 from app.services import training_report
+from app.services.ai_usage_service import record_usage
 
 router = APIRouter()
 
@@ -243,6 +244,15 @@ async def finish_training_session(
                 training_session_id=sess.id,
             )
         )
+
+    # 记录AI用量（训练总结）
+    await record_usage(
+        user_id=user_id,
+        usage_type="training_summary",
+        input_tokens=0,
+        output_tokens=0,
+        db=db,
+    )
 
     await db.commit()
 

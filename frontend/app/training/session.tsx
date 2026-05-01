@@ -18,6 +18,7 @@ import {
   resumeBgMusic,
 } from '@/src/services/voiceService';
 import { api } from '@/src/api/client';
+import * as offlineService from '@/src/services/offlineService';
 
 const AI_CHAT_URL = '/ai/chat';
 
@@ -46,12 +47,37 @@ export default function TrainingSessionScreen() {
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
 
   const pausedRef = useRef(false);
   const prevActionIndexRef = useRef(-1);
 
   const current = actions[currentActionIndex] ?? null;
   const player = useVideoPlayer(null, (p) => { p.loop = true; p.muted = true; });
+
+  // 检查网络状态
+  useEffect(() => {
+    void offlineService.isOnline().then(setIsOnline);
+  }, []);
+
+  // 获取视频URL（优先使用本地缓存）
+  const getVideoUrl = useCallback(async (action: typeof current): Promise<string | null> => {
+    if (!action?.video_url) return null;
+
+    // 检查是否有本地缓存
+    const isDownloaded = await offlineService.isVideoDownloaded(action.action_id);
+    if (isDownloaded) {
+      return offlineService.getVideoLocalPath(action.action_id);
+    }
+
+    // 如果在线，使用远程URL
+    if (isOnline) {
+      return action.video_url;
+    }
+
+    // 离线且无缓存
+    return null;
+  }, [isOnline]);
 
   // 倒计时主循环
   useEffect(() => {
@@ -144,7 +170,10 @@ export default function TrainingSessionScreen() {
   }, [busy, skipCurrentAction]);
 
   const onMicPressIn = useCallback(async () => {
-    if (!voiceEnabled) { Alert.alert('无网络', '语音功能需要联网使用'); return; }
+    if (!isOnline) {
+      Alert.alert('离线模式', 'AI语音功能需要联网使用');
+      return;
+    }
     setAiMessage(null);
     setIsRecording(true);
     stopSpeaking();
@@ -195,23 +224,29 @@ export default function TrainingSessionScreen() {
     if (currentActionIndex === prevActionIndexRef.current) return;
     prevActionIndexRef.current = currentActionIndex;
 
-    if (current.video_url) player.replace({ uri: current.video_url });
-    setPhase('exercising');
-    setCountdown(current.set_duration_seconds);
-    setAiMessage(null);
+    void (async () => {
+      const videoUrl = await getVideoUrl(current);
+      if (videoUrl) {
+        player.replace({ uri: videoUrl });
+      }
 
-    if (voiceEnabled) {
-      player.pause();
-      const tip = current.tips
-        ? `第${currentActionIndex + 1}个动作：${current.name}，${current.tips}`
-        : `第${currentActionIndex + 1}个动作：${current.name}，注意保持正确姿势`;
-      speakText(tip)
-        .then(() => { if (current.video_url && !pausedRef.current) player.play(); })
-        .catch(() => { if (current.video_url && !pausedRef.current) player.play(); });
-    } else {
-      if (current.video_url) player.play();
-    }
-  }, [currentActionIndex, current]);
+      setPhase('exercising');
+      setCountdown(current.set_duration_seconds);
+      setAiMessage(null);
+
+      if (voiceEnabled && isOnline) {
+        player.pause();
+        const tip = current.tips
+          ? `第${currentActionIndex + 1}个动作：${current.name}，${current.tips}`
+          : `第${currentActionIndex + 1}个动作：${current.name}，注意保持正确姿势`;
+        speakText(tip)
+          .then(() => { if (videoUrl && !pausedRef.current) player.play(); })
+          .catch(() => { if (videoUrl && !pausedRef.current) player.play(); });
+      } else {
+        if (videoUrl) player.play();
+      }
+    })();
+  }, [currentActionIndex, current, isOnline, voiceEnabled, getVideoUrl]);
 
   if (!sessionId || actions.length === 0) {
     return (
