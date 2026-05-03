@@ -45,6 +45,16 @@ export async function resumeBgMusic(): Promise<void> {
   if (_bgMusic) await _bgMusic.playAsync().catch(() => {});
 }
 
+// 降低背景音乐音量（用于TTS播放时）
+export async function duckBgMusic(): Promise<void> {
+  if (_bgMusic) await _bgMusic.setVolumeAsync(0.1).catch(() => {});
+}
+
+// 恢复背景音乐音量
+export async function unduckBgMusic(): Promise<void> {
+  if (_bgMusic) await _bgMusic.setVolumeAsync(0.4).catch(() => {});
+}
+
 export async function startRecording(): Promise<void> {
   if (_recording || _recognizing) return; // 防止在识别过程中开始新录音
   const { status } = await Audio.requestPermissionsAsync();
@@ -121,7 +131,7 @@ export async function stopRecordingAndRecognize(): Promise<string> {
 export async function speakText(text: string): Promise<void> {
   if (!text.trim()) return;
   stopSpeaking();
-  await pauseBgMusic();
+  await duckBgMusic(); // 降低背景音乐音量而不是暂停
 
   try {
     const token = (api.defaults.headers.common['Authorization'] as string) ?? '';
@@ -132,11 +142,11 @@ export async function speakText(text: string): Promise<void> {
       body: JSON.stringify({ text }),
     });
     console.log('TTS 响应状态:', response.status, 'content-type:', response.headers.get('content-type'));
-    if (!response.ok) { console.log('TTS 失败'); await resumeBgMusic(); return; }
+    if (!response.ok) { console.log('TTS 失败'); await unduckBgMusic(); return; }
 
     const arrayBuffer = await response.arrayBuffer();
     console.log('TTS 音频大小:', arrayBuffer.byteLength);
-    if (arrayBuffer.byteLength === 0) { console.log('TTS 音频为空'); await resumeBgMusic(); return; }
+    if (arrayBuffer.byteLength === 0) { console.log('TTS 音频为空'); await unduckBgMusic(); return; }
 
     const bytes = new Uint8Array(arrayBuffer);
     let binary = '';
@@ -174,7 +184,7 @@ export async function speakText(text: string): Promise<void> {
     console.log('TTS 错误:', e);
     _speaking = false;
   } finally {
-    await resumeBgMusic();
+    await unduckBgMusic(); // 恢复背景音乐音量
   }
 }
 
