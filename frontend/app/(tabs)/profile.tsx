@@ -52,31 +52,19 @@ export default function TabProfileScreen() {
 
   const groups: MenuGroup[] = [
     {
-      title: '训练',
+      title: '个人信息',
       items: [
+        {
+          icon: 'user-md',
+          label: '健康档案',
+          sub: '身体信息与腰椎情况',
+          href: '/profile/health-profile' as Href,
+        },
         {
           icon: 'heartbeat',
           label: '体能测试',
-          sub: '评估6项动作',
+          sub: '评估6项动作能力',
           href: '/assessment' as Href,
-        },
-        {
-          icon: 'list-alt',
-          label: '训练记录',
-          sub: '查看历史训练',
-          href: '/(tabs)/records' as Href,
-        },
-        {
-          icon: 'calendar-check-o',
-          label: '打卡日历',
-          sub: '连续打卡记录',
-          href: '/checkin/calendar' as Href,
-        },
-        {
-          icon: 'trophy',
-          label: '排行榜',
-          sub: '周/月/年打卡排名',
-          href: '/checkin/leaderboard' as Href,
         },
       ],
     },
@@ -92,19 +80,25 @@ export default function TabProfileScreen() {
         {
           icon: 'bar-chart',
           label: 'AI用量统计',
-          sub: '查看使用情况',
+          sub: '查看使用情况与剩余次数',
           href: '/usage' as Href,
         },
       ],
     },
     {
-      title: '个人资料',
+      title: '应用设置',
       items: [
         {
-          icon: 'user-md',
-          label: '运动档案',
-          sub: '身体信息与腰椎情况',
-          href: '/profile/health-profile' as Href,
+          icon: 'cloud-download',
+          label: '离线管理',
+          sub: '视频下载与缓存管理',
+          href: '/profile/offline' as Href,
+        },
+        {
+          icon: 'lock',
+          label: '隐私设置',
+          sub: '数据隐私与权限管理',
+          href: '/profile/privacy' as Href,
         },
         {
           icon: 'download',
@@ -115,19 +109,13 @@ export default function TabProfileScreen() {
       ],
     },
     {
-      title: '设置',
+      title: '其他',
       items: [
         {
-          icon: 'cloud-download',
-          label: '离线模式',
-          sub: '视频下载与数据同步',
-          href: '/profile/offline' as Href,
-        },
-        {
-          icon: 'cog',
-          label: '应用设置',
-          sub: '通知与偏好',
-          href: '/profile/settings' as Href,
+          icon: 'info-circle',
+          label: '关于',
+          sub: '版本信息与服务条款',
+          href: '/profile/about' as Href,
         },
         {
           icon: 'sign-out',

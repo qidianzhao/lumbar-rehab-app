@@ -15,8 +15,8 @@ export default function TrainingIndexScreen() {
       <Text style={[styles.hint, { color: theme.text }]}>
         请从「计划详情」选择训练日开始；或下方入口仅作流程演示（需自行带上 plan 参数）。
       </Text>
-      <Pressable style={[styles.btn, { backgroundColor: theme.tint }]} onPress={() => router.push('/(tabs)/plans' as Href)}>
-        <Text style={styles.btnText}>前往计划</Text>
+      <Pressable style={[styles.btn, { backgroundColor: theme.tint }]} onPress={() => router.push('/(tabs)/program' as Href)}>
+        <Text style={styles.btnText}>前往方案</Text>
       </Pressable>
     </View>
   );

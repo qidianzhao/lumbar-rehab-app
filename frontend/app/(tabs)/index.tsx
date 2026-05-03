@@ -108,7 +108,7 @@ export default function HomeScreen() {
             <FontAwesome name="coffee" size={28} color={theme.tabIconDefault} />
             <Text style={[styles.restTitle, { color: theme.text }]}>今天是休息日</Text>
             <Text style={[styles.muted, { color: theme.text }]}>好好休息，明天继续加油</Text>
-            <Pressable style={styles.linkRow} onPress={() => router.push('/plans' as Href)}>
+            <Pressable style={styles.linkRow} onPress={() => router.push('/(tabs)/program' as Href)}>
               <Text style={{ color: theme.tint, fontSize: 14 }}>查看本周计划</Text>
               <FontAwesome name="chevron-right" size={11} color={theme.tint} />
             </Pressable>
@@ -125,9 +125,40 @@ export default function HomeScreen() {
             <View style={[styles.barBg, { backgroundColor: `${theme.tint}22` }]}>
               <View style={[styles.barFill, { backgroundColor: theme.tint, width: `${totalDays ? (completedDays / totalDays) * 100 : 0}%` }]} />
             </View>
-            <Pressable style={styles.linkRow} onPress={() => router.push('/plans' as Href)}>
+            <Pressable style={styles.linkRow} onPress={() => router.push('/(tabs)/program' as Href)}>
               <Text style={{ color: theme.tint, fontSize: 14 }}>查看完整计划</Text>
               <FontAwesome name="chevron-right" size={11} color={theme.tint} />
+            </Pressable>
+          </View>
+        )}
+
+        {/* 提醒设置 */}
+        {plan && (
+          <View style={[styles.card, { borderColor: theme.tabIconDefault }]}>
+            <Text style={[styles.cardTitle, { color: theme.text }]}>提醒设置</Text>
+
+            <Pressable style={styles.settingRow}>
+              <View style={styles.settingLeft}>
+                <FontAwesome name="bell" size={16} color={theme.tint} />
+                <View style={styles.settingText}>
+                  <Text style={[styles.settingLabel, { color: theme.text }]}>训练提醒</Text>
+                  <Text style={[styles.settingDesc, { color: theme.text }]}>每天提醒您按时训练</Text>
+                </View>
+              </View>
+              <Text style={[styles.settingValue, { color: theme.text }]}>未设置</Text>
+            </Pressable>
+
+            <View style={[styles.divider, { backgroundColor: theme.tabIconDefault }]} />
+
+            <Pressable style={styles.settingRow}>
+              <View style={styles.settingLeft}>
+                <FontAwesome name="clock-o" size={16} color={theme.tint} />
+                <View style={styles.settingText}>
+                  <Text style={[styles.settingLabel, { color: theme.text }]}>久坐提醒</Text>
+                  <Text style={[styles.settingDesc, { color: theme.text }]}>定时提醒拉伸放松</Text>
+                </View>
+              </View>
+              <Text style={[styles.settingValue, { color: theme.text }]}>未设置</Text>
             </Pressable>
           </View>
         )}
@@ -136,8 +167,8 @@ export default function HomeScreen() {
         <View style={styles.quickRow}>
           {[
             { icon: 'clipboard' as const, label: '体能测试', href: '/assessment' as Href },
-            { icon: 'history' as const, label: '训练记录', href: '/(tabs)/records' as Href },
-            { icon: 'user' as const, label: '个人中心', href: '/(tabs)/profile' as Href },
+            { icon: 'comments' as const, label: 'AI助手', href: '/chat' as Href },
+            { icon: 'calendar-check-o' as const, label: '打卡日历', href: '/checkin/calendar' as Href },
           ].map((e) => (
             <Pressable key={e.label} style={[styles.quickBtn, { borderColor: theme.tabIconDefault }]} onPress={() => router.push(e.href)}>
               <FontAwesome name={e.icon} size={20} color={theme.tint} />
@@ -176,6 +207,15 @@ const styles = StyleSheet.create({
   progressValue: { fontSize: 15, fontWeight: '800' },
   barBg: { height: 6, borderRadius: 999, overflow: 'hidden' },
   barFill: { height: 6, borderRadius: 999 },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, padding: 16, marginBottom: 16 },
+  cardTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
+  settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
+  settingLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  settingText: { flex: 1, gap: 2 },
+  settingLabel: { fontSize: 15, fontWeight: '600' },
+  settingDesc: { fontSize: 12, opacity: 0.5 },
+  settingValue: { fontSize: 13, opacity: 0.6 },
+  divider: { height: StyleSheet.hairlineWidth, marginVertical: 8 },
   quickRow: { flexDirection: 'row', gap: 10 },
   quickBtn: { flex: 1, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, alignItems: 'center', paddingVertical: 14, gap: 6 },
   quickLabel: { fontSize: 12, fontWeight: '600' },

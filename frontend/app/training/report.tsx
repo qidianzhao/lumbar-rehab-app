@@ -198,7 +198,7 @@ export default function TrainingReportScreen() {
         </View>
         <Pressable
           style={[styles.primary, { backgroundColor: theme.tint }]}
-          onPress={() => router.push('/(tabs)/plans' as Href)}
+          onPress={() => router.push('/(tabs)/program' as Href)}
         >
           <Text style={styles.primaryText}>查看训练计划</Text>
         </Pressable>

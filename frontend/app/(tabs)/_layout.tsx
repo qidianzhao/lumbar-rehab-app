@@ -30,17 +30,17 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="plans"
+        name="program"
         options={{
-          title: '计划',
-          tabBarIcon: ({ color }) => <TabBarIcon name="list" color={color} />,
+          title: '方案',
+          tabBarIcon: ({ color }) => <TabBarIcon name="list-alt" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="records"
+        name="discover"
         options={{
-          title: '记录',
-          tabBarIcon: ({ color }) => <TabBarIcon name="book" color={color} />,
+          title: '发现',
+          tabBarIcon: ({ color }) => <TabBarIcon name="compass" color={color} />,
         }}
       />
       <Tabs.Screen

@@ -61,7 +61,7 @@ export default function PlanGenerateScreen() {
     setError(null);
     try {
       await planApi.confirmPlan(plan.id);
-      router.replace('/(tabs)/plans' as Href);
+      router.replace('/(tabs)/program' as Href);
     } catch (e) {
       setError(e instanceof Error ? e.message : '确认失败');
     } finally {
