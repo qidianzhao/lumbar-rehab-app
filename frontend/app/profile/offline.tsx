@@ -168,17 +168,51 @@ export default function OfflineManagementScreen() {
       const errorCount = result.errors.length;
 
       if (errorCount > 0) {
+        // 分类显示错误
+        const errorMessages = result.errors.map((err, idx) => `${idx + 1}. ${err}`).join('\n');
         Alert.alert(
-          '同步完成',
-          `成功: ${successCount} 条\n失败: ${errorCount} 条\n\n${result.errors.join('\n')}`
+          '同步部分完成',
+          `✓ 成功同步: ${successCount} 条\n✗ 失败: ${errorCount} 条\n\n失败原因：\n${errorMessages}\n\n建议：\n• 检查网络连接\n• 稍后重试同步`,
+          [{ text: '知道了' }]
         );
       } else {
-        Alert.alert('同步成功', `已同步 ${successCount} 条数据`);
+        Alert.alert('同步成功', `✓ 已成功同步 ${successCount} 条数据到服务器`, [{ text: '好的' }]);
       }
 
       await loadStatus();
-    } catch (error) {
-      Alert.alert('同步失败', error instanceof Error ? error.message : '请重试');
+    } catch (error: any) {
+      let errorMessage = '同步失败';
+      let errorDetail = '';
+
+      if (error.response) {
+        // HTTP错误
+        const status = error.response.status;
+        if (status === 401) {
+          errorDetail = '登录已过期，请重新登录';
+        } else if (status === 403) {
+          errorDetail = '没有权限执行此操作';
+        } else if (status === 500) {
+          errorDetail = '服务器内部错误，请稍后重试';
+        } else if (status >= 400 && status < 500) {
+          errorDetail = '请求数据格式错误';
+        } else {
+          errorDetail = `服务器错误 (${status})`;
+        }
+      } else if (error.message?.includes('Network')) {
+        errorDetail = '网络连接失败，请检查网络设置';
+      } else if (error.message?.includes('timeout')) {
+        errorDetail = '请求超时，请检查网络连接';
+      } else if (error.message) {
+        errorDetail = error.message;
+      } else {
+        errorDetail = '未知错误，请重试';
+      }
+
+      Alert.alert(
+        errorMessage,
+        `${errorDetail}\n\n建议：\n• 确保网络连接正常\n• 检查是否已登录\n• 稍后重试`,
+        [{ text: '知道了' }]
+      );
     } finally {
       setSyncing(false);
     }

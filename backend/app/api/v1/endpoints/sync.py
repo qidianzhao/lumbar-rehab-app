@@ -43,6 +43,14 @@ async def sync_upload(
     # ── 同步训练会话 ────────────────────────────────────────
     for offline_session in body.training_sessions:
         try:
+            # 验证必要字段
+            if not offline_session.plan_id:
+                raise ValueError("缺少训练计划ID")
+            if not offline_session.plan_day_id:
+                raise ValueError("缺少训练日ID")
+            if not offline_session.started_at:
+                raise ValueError("缺少开始时间")
+
             # 创建训练会话
             session = TrainingSession(
                 user_id=user_id,
@@ -97,18 +105,29 @@ async def sync_upload(
                 server_id=session.id,
             ))
 
+        except ValueError as e:
+            errors.append(f"训练会话 {offline_session.local_id[:8]}: 数据格式错误 - {str(e)}")
         except Exception as e:
-            errors.append(f"Session {offline_session.local_id}: {str(e)}")
+            error_type = type(e).__name__
+            errors.append(f"训练会话 {offline_session.local_id[:8]}: {error_type} - {str(e)}")
 
     # ── 同步打卡记录 ────────────────────────────────────────
     for offline_checkin in body.checkins:
         try:
+            # 验证必要字段
+            if not offline_checkin.checkin_date:
+                raise ValueError("缺少打卡日期")
+
             # 查找对应的服务器 session_id
             server_session_id = session_id_map.get(offline_checkin.local_session_id)
 
             # 检查是否已存在
             from datetime import date
-            checkin_date = date.fromisoformat(offline_checkin.checkin_date)
+            try:
+                checkin_date = date.fromisoformat(offline_checkin.checkin_date)
+            except ValueError:
+                raise ValueError(f"日期格式错误: {offline_checkin.checkin_date}")
+
             existing = await db.scalar(
                 select(Checkin).where(
                     Checkin.user_id == user_id,
@@ -136,8 +155,11 @@ async def sync_upload(
                 server_id=checkin.id,
             ))
 
+        except ValueError as e:
+            errors.append(f"打卡记录 {offline_checkin.local_id[:8]}: 数据格式错误 - {str(e)}")
         except Exception as e:
-            errors.append(f"Checkin {offline_checkin.local_id}: {str(e)}")
+            error_type = type(e).__name__
+            errors.append(f"打卡记录 {offline_checkin.local_id[:8]}: {error_type} - {str(e)}")
 
     await db.commit()
 
