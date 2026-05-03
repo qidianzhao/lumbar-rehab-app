@@ -13,7 +13,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { freeChat, getUsageLimit, type ChatMessage } from '@/src/services/chatApi';
+
+const CHAT_HISTORY_KEY = 'chat_history';
+const MAX_HISTORY_COUNT = 50;
 
 interface Message extends ChatMessage {
   id: string;
@@ -29,6 +33,7 @@ export default function ChatScreen() {
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
+    loadChatHistory();
     loadUsageLimit();
 
     const keyboardDidShowListener = Keyboard.addListener(
@@ -49,6 +54,49 @@ export default function ChatScreen() {
       keyboardDidHideListener.remove();
     };
   }, []);
+
+  const loadChatHistory = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(CHAT_HISTORY_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Message[];
+        setMessages(parsed.map(m => ({ ...m, timestamp: new Date(m.timestamp) })));
+      }
+    } catch (error) {
+      console.error('加载聊天记录失败:', error);
+    }
+  };
+
+  const saveChatHistory = async (msgs: Message[]) => {
+    try {
+      const toSave = msgs.slice(-MAX_HISTORY_COUNT);
+      await AsyncStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(toSave));
+    } catch (error) {
+      console.error('保存聊天记录失败:', error);
+    }
+  };
+
+  const clearChatHistory = async () => {
+    Alert.alert(
+      '清空聊天记录',
+      '确定要清空所有聊天记录吗？',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '确定',
+          style: 'destructive',
+          onPress: async () => {
+            setMessages([]);
+            try {
+              await AsyncStorage.removeItem(CHAT_HISTORY_KEY);
+            } catch (error) {
+              console.error('清空聊天记录失败:', error);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const loadUsageLimit = async () => {
     try {
@@ -98,7 +146,9 @@ export default function ChatScreen() {
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      const updatedMessages = [...messages, userMessage, assistantMessage];
+      setMessages(updatedMessages);
+      await saveChatHistory(updatedMessages);
 
       if (remaining !== null) {
         setRemaining(remaining - 1);
@@ -145,12 +195,20 @@ export default function ChatScreen() {
       <View style={styles.container}>
         {/* 配额提示 */}
         <View style={styles.quotaBar}>
-          <Ionicons name="chatbubble-ellipses-outline" size={16} color="#666" />
-          <Text style={styles.quotaText}>
-            {remaining !== null
-              ? `今日剩余对话次数: ${remaining}/15`
-              : '加载中...'}
-          </Text>
+          <View style={styles.quotaLeft}>
+            <Ionicons name="chatbubble-ellipses-outline" size={16} color="#666" />
+            <Text style={styles.quotaText}>
+              {remaining !== null
+                ? `今日剩余对话次数: ${remaining}/15`
+                : '加载中...'}
+            </Text>
+          </View>
+          {messages.length > 0 && (
+            <TouchableOpacity onPress={clearChatHistory} style={styles.clearButton}>
+              <Ionicons name="trash-outline" size={16} color="#999" />
+              <Text style={styles.clearText}>清空</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* 消息列表 */}
@@ -216,17 +274,32 @@ const styles = StyleSheet.create({
   quotaBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 8,
     paddingHorizontal: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+  },
+  quotaLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
   },
   quotaText: {
     fontSize: 13,
     color: '#666',
+  },
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  clearText: {
+    fontSize: 12,
+    color: '#999',
   },
   emptyContainer: {
     flex: 1,
