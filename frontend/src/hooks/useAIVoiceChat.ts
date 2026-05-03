@@ -21,6 +21,8 @@ interface AIVoiceChatResult {
   isRecording: boolean;
   /** AI消息内容 */
   aiMessage: string | null;
+  /** 是否正在处理AI请求 */
+  isProcessing: boolean;
   /** 设置AI消息 */
   setAiMessage: (msg: string | null) => void;
   /** 按下麦克风按钮 */
@@ -40,12 +42,14 @@ export function useAIVoiceChat(options: AIVoiceChatOptions): AIVoiceChatResult {
 
   const [isRecording, setIsRecording] = useState(false);
   const [aiMessage, setAiMessage] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const sendTextToAI = useCallback(async (text: string) => {
     if (!text.trim()) return;
 
     console.log('🎤 发送到AI:', text);
     setAiMessage(`你说：${text}`);
+    setIsProcessing(true);
 
     try {
       const context = getContext();
@@ -81,6 +85,8 @@ export function useAIVoiceChat(options: AIVoiceChatOptions): AIVoiceChatResult {
       setAiMessage(errorMsg);
       await speakText(errorMsg).catch(() => {});
       Alert.alert('AI交互失败', errorMsg);
+    } finally {
+      setIsProcessing(false);
     }
   }, [getContext]);
 
@@ -139,6 +145,7 @@ export function useAIVoiceChat(options: AIVoiceChatOptions): AIVoiceChatResult {
   return {
     isRecording,
     aiMessage,
+    isProcessing,
     setAiMessage,
     onMicPressIn,
     onMicPressOut,

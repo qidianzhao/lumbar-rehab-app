@@ -10,6 +10,7 @@ import {
   Text,
   TextInput,
   View,
+  Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -128,13 +129,15 @@ export default function AssessmentTestScreen() {
   const [values, setValues] = useState<Record<number, number>>({});
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [showTextInput, setShowTextInput] = useState(false);
+  const [textInput, setTextInput] = useState('');
 
   const current = items[index];
   const currentVideoUrl = current ? (videoUrls[current.action_id] ?? null) : null;
   const player = useVideoPlayer(null, (p) => { p.loop = true; p.muted = true; });
 
   // 使用统一的AI语音交互Hook
-  const { isRecording, aiMessage, onMicPressIn, onMicPressOut } = useAIVoiceChat({
+  const { isRecording, aiMessage, isProcessing, onMicPressIn, onMicPressOut, sendTextToAI } = useAIVoiceChat({
     context: {
       action_name: current?.name,
       phase: 'assessment',
@@ -233,6 +236,16 @@ export default function AssessmentTestScreen() {
     if (!current) return;
     setNotes((prev) => ({ ...prev, [current.action_id]: v }));
   }
+
+  const handleTextSubmit = useCallback(async () => {
+    if (!textInput.trim() || isProcessing) return;
+
+    const text = textInput.trim();
+    setTextInput('');
+    setShowTextInput(false);
+
+    await sendTextToAI(text);
+  }, [textInput, isProcessing, sendTextToAI]);
 
   async function onSubmitAll() {
     if (items.length === 0) return;
@@ -342,6 +355,13 @@ export default function AssessmentTestScreen() {
         </Pressable>
 
         <Pressable
+          style={[styles.iconBtn, { borderColor: theme.tabIconDefault }]}
+          onPress={() => setShowTextInput(true)}
+        >
+          <FontAwesome name="keyboard-o" size={20} color={theme.tabIconDefault} />
+        </Pressable>
+
+        <Pressable
           style={[styles.btnOutline, { borderColor: theme.tint, opacity: index === 0 ? 0.4 : 1 }]}
           onPress={() => setIndex((i) => Math.max(0, i - 1))}
           disabled={index === 0}
@@ -367,6 +387,48 @@ export default function AssessmentTestScreen() {
           </Pressable>
         )}
       </View>
+
+      <Modal
+        visible={showTextInput}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTextInput(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowTextInput(false)}>
+          <Pressable style={[styles.modalContent, { backgroundColor: theme.background }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>向AI助手提问</Text>
+            <TextInput
+              style={[styles.textInputField, { borderColor: theme.tabIconDefault, color: theme.text }]}
+              value={textInput}
+              onChangeText={setTextInput}
+              placeholder="输入你的问题..."
+              placeholderTextColor="#999"
+              multiline
+              autoFocus
+              onSubmitEditing={handleTextSubmit}
+            />
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalBtn, styles.modalBtnCancel, { borderColor: theme.tabIconDefault }]}
+                onPress={() => { setShowTextInput(false); setTextInput(''); }}
+              >
+                <Text style={[styles.modalBtnText, { color: theme.text }]}>取消</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, styles.modalBtnSubmit, { backgroundColor: theme.tint, opacity: (!textInput.trim() || isProcessing) ? 0.5 : 1 }]}
+                onPress={handleTextSubmit}
+                disabled={!textInput.trim() || isProcessing}
+              >
+                {isProcessing ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={[styles.modalBtnText, { color: '#fff' }]}>发送</Text>
+                )}
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
@@ -404,4 +466,13 @@ const styles = StyleSheet.create({
   err: { color: '#c62828', marginTop: 8, textAlign: 'center' },
   aiBubble: { backgroundColor: 'rgba(47,149,220,0.1)', borderRadius: 10, padding: 10, marginBottom: 8 },
   aiText: { fontSize: 14, color: '#2f95dc', lineHeight: 20 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  modalContent: { width: '100%', maxWidth: 400, borderRadius: 16, padding: 20, gap: 16 },
+  modalTitle: { fontSize: 18, fontWeight: '700', textAlign: 'center' },
+  textInputField: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 15, minHeight: 100, textAlignVertical: 'top' },
+  modalActions: { flexDirection: 'row', gap: 12 },
+  modalBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  modalBtnCancel: { borderWidth: 1 },
+  modalBtnSubmit: {},
+  modalBtnText: { fontSize: 15, fontWeight: '600' },
 });

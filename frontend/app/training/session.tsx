@@ -2,7 +2,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { type Href, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View, Modal } from 'react-native';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -48,6 +48,8 @@ export default function TrainingSessionScreen() {
   const [busy, setBusy] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [showTextInput, setShowTextInput] = useState(false);
+  const [textInput, setTextInput] = useState('');
 
   const pausedRef = useRef(false);
   const prevPausedRef = useRef(false);
@@ -57,7 +59,7 @@ export default function TrainingSessionScreen() {
   const player = useVideoPlayer(null, (p) => { p.loop = true; p.muted = true; });
 
   // AI语音交互Hook
-  const { isRecording, aiMessage, setAiMessage, onMicPressIn, onMicPressOut } = useAIVoiceChat({
+  const { isRecording, aiMessage, setAiMessage, isProcessing, onMicPressIn, onMicPressOut, sendTextToAI } = useAIVoiceChat({
     isOnline,
     getContext: () => ({
       action_name: current?.name ?? '',
@@ -234,6 +236,16 @@ export default function TrainingSessionScreen() {
     finally { setBusy(false); }
   }, [busy, skipCurrentAction, voiceEnabled]);
 
+  const handleTextSubmit = useCallback(async () => {
+    if (!textInput.trim() || isProcessing) return;
+
+    const text = textInput.trim();
+    setTextInput('');
+    setShowTextInput(false);
+
+    await sendTextToAI(text);
+  }, [textInput, isProcessing, sendTextToAI]);
+
   // 背景音乐
   useEffect(() => {
     startBgMusic('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3').catch(() => {});
@@ -404,13 +416,21 @@ export default function TrainingSessionScreen() {
             <FontAwesome name={paused ? 'play' : 'pause'} size={22} color={theme.tint} />
           </Pressable>
           {voiceEnabled ? (
-            <Pressable
-              style={[styles.iconBtn, { borderColor: isRecording ? '#e53935' : '#888', backgroundColor: isRecording ? '#fdecea' : 'transparent' }]}
-              onPressIn={() => void onMicPressIn()}
-              onPressOut={() => void onMicPressOut()}
-            >
-              <FontAwesome name="microphone" size={22} color={isRecording ? '#e53935' : '#888'} />
-            </Pressable>
+            <>
+              <Pressable
+                style={[styles.iconBtn, { borderColor: isRecording ? '#e53935' : '#888', backgroundColor: isRecording ? '#fdecea' : 'transparent' }]}
+                onPressIn={() => void onMicPressIn()}
+                onPressOut={() => void onMicPressOut()}
+              >
+                <FontAwesome name="microphone" size={22} color={isRecording ? '#e53935' : '#888'} />
+              </Pressable>
+              <Pressable
+                style={[styles.iconBtn, { borderColor: '#888' }]}
+                onPress={() => setShowTextInput(true)}
+              >
+                <FontAwesome name="keyboard-o" size={22} color="#888" />
+              </Pressable>
+            </>
           ) : null}
           <Pressable
             style={[styles.btn, { backgroundColor: '#888', flex: 1, opacity: busy ? 0.5 : 1 }]}
@@ -422,6 +442,48 @@ export default function TrainingSessionScreen() {
         </View>
         {isRecording ? <Text style={styles.recordingHint}>松手发送</Text> : null}
       </View>
+
+      <Modal
+        visible={showTextInput}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTextInput(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowTextInput(false)}>
+          <Pressable style={[styles.modalContent, { backgroundColor: theme.background }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>向AI助手提问</Text>
+            <TextInput
+              style={[styles.textInputField, { borderColor: theme.tabIconDefault, color: theme.text }]}
+              value={textInput}
+              onChangeText={setTextInput}
+              placeholder="输入你的问题..."
+              placeholderTextColor="#999"
+              multiline
+              autoFocus
+              onSubmitEditing={handleTextSubmit}
+            />
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalBtn, styles.modalBtnCancel, { borderColor: theme.tabIconDefault }]}
+                onPress={() => { setShowTextInput(false); setTextInput(''); }}
+              >
+                <Text style={[styles.modalBtnText, { color: theme.text }]}>取消</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, styles.modalBtnSubmit, { backgroundColor: theme.tint, opacity: (!textInput.trim() || isProcessing) ? 0.5 : 1 }]}
+                onPress={handleTextSubmit}
+                disabled={!textInput.trim() || isProcessing}
+              >
+                {isProcessing ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={[styles.modalBtnText, { color: '#fff' }]}>发送</Text>
+                )}
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -464,4 +526,13 @@ const styles = StyleSheet.create({
   finishedBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   finishedBtnTextSecondary: { fontSize: 16, fontWeight: '600' },
   recordingHint: { textAlign: 'center', color: '#e53935', fontSize: 13, marginTop: 8 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  modalContent: { width: '100%', maxWidth: 400, borderRadius: 16, padding: 20, gap: 16 },
+  modalTitle: { fontSize: 18, fontWeight: '700', textAlign: 'center' },
+  textInputField: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 15, minHeight: 100, textAlignVertical: 'top' },
+  modalActions: { flexDirection: 'row', gap: 12 },
+  modalBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  modalBtnCancel: { borderWidth: 1 },
+  modalBtnSubmit: {},
+  modalBtnText: { fontSize: 15, fontWeight: '600' },
 });
