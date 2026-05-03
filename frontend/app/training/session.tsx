@@ -121,7 +121,11 @@ export default function TrainingSessionScreen() {
 
       if (s.isWorkoutFlowDone()) {
         setPhase('finished');
-        if (voiceEnabled) speakText('训练完成，干得漂亮！').catch(() => {});
+        if (voiceEnabled) {
+          const totalActions = actions.length;
+          const summary = `训练完成，干得漂亮！你完成了${totalActions}个动作的训练，继续保持，你会越来越强！`;
+          speakText(summary).catch(() => {});
+        }
         return;
       }
 
