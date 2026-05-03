@@ -128,7 +128,9 @@ async def generate_plan(
     session.add(plan)
     await session.flush()
 
-    duration_minutes = max(15, min(45, request.preferred_duration))
+    # 计算实际训练时长：(动作数 × 组数 × (每组时长 + 休息时长)) / 60
+    total_actions = w_need + c_need + s_need
+    duration_minutes = int((total_actions * sets * (set_dur + rest_sec)) / 60)
 
     for week in range(1, estimated_weeks + 1):
         for day_idx, day_num in enumerate(training_days, start=1):

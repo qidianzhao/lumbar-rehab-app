@@ -35,10 +35,15 @@ export default function PlanGenerateScreen() {
       });
       router.replace(`/plan/${plan.id}` as Href);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '生成失败');
+      const errorMsg = e instanceof Error ? e.message : '生成失败';
+      setError(errorMsg);
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function onRetry() {
+    await onSubmit();
   }
 
   return (
@@ -100,7 +105,16 @@ export default function PlanGenerateScreen() {
       </View>
 
       {error ? (
-        <Text style={styles.error}>{error}</Text>
+        <View style={styles.errorContainer}>
+          <Text style={styles.error}>{error}</Text>
+          <Pressable
+            style={[styles.retryBtn, { borderColor: theme.tint }]}
+            onPress={onRetry}
+            disabled={submitting}
+          >
+            <Text style={[styles.retryText, { color: theme.tint }]}>重试</Text>
+          </Pressable>
+        </View>
       ) : null}
 
       <Pressable
@@ -134,7 +148,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   chipText: { fontSize: 15, fontWeight: '600' },
-  error: { color: '#c62828', marginBottom: 12, fontSize: 14 },
+  errorContainer: {
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: '#ffebee',
+    borderRadius: 8,
+    gap: 8,
+  },
+  error: { color: '#c62828', fontSize: 14, lineHeight: 20 },
+  retryBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+  },
+  retryText: { fontSize: 14, fontWeight: '600' },
   submit: {
     marginTop: 8,
     paddingVertical: 14,

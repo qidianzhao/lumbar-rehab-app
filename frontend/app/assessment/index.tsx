@@ -9,11 +9,14 @@ import {
   Text,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import type { AssessmentTestItem } from '@/src/services/assessmentApi';
 import { getTestItems } from '@/src/services/assessmentApi';
+
+const ASSESSMENT_PROGRESS_KEY = '@assessment_progress';
 
 const DIMENSION_LABELS: Record<string, string> = {
   core_endurance: '核心耐力',
@@ -38,6 +41,7 @@ export default function AssessmentIntroScreen() {
   const [items, setItems] = useState<AssessmentTestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasSavedProgress, setHasSavedProgress] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,6 +49,12 @@ export default function AssessmentIntroScreen() {
       try {
         const list = await getTestItems();
         if (!cancelled) setItems(list);
+
+        // 检查是否有保存的进度
+        const saved = await AsyncStorage.getItem(ASSESSMENT_PROGRESS_KEY);
+        if (!cancelled && saved) {
+          setHasSavedProgress(true);
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : '加载失败');
       } finally {
@@ -75,6 +85,18 @@ export default function AssessmentIntroScreen() {
         <Text style={[styles.item, { color: theme.text }]}>· 不适 / 疼痛明显请立即停止</Text>
         <Text style={[styles.item, { color: theme.text }]}>· 动作保持标准姿势，宁少勿乱</Text>
       </View>
+
+      {/* 未完成进度提示 */}
+      {hasSavedProgress && (
+        <View style={[styles.card, { borderColor: theme.tint, backgroundColor: `${theme.tint}11` }]}>
+          <View style={styles.progressNotice}>
+            <FontAwesome name="info-circle" size={20} color={theme.tint} />
+            <Text style={[styles.progressText, { color: theme.tint }]}>
+              检测到未完成的测试进度，点击"继续测试"可恢复
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* 测试项目列表 */}
       <View style={[styles.card, { borderColor: theme.tabIconDefault }]}>
@@ -121,8 +143,22 @@ export default function AssessmentIntroScreen() {
         style={[styles.btn, { backgroundColor: theme.tint }]}
         onPress={() => router.push('/assessment/test' as Href)}
       >
-        <Text style={styles.btnText}>开始测试</Text>
+        <Text style={styles.btnText}>{hasSavedProgress ? '继续测试' : '开始测试'}</Text>
       </Pressable>
+
+      {/* 重新开始按钮 */}
+      {hasSavedProgress && (
+        <Pressable
+          style={[styles.btnOutline, { borderColor: theme.tabIconDefault }]}
+          onPress={async () => {
+            await AsyncStorage.removeItem(ASSESSMENT_PROGRESS_KEY);
+            setHasSavedProgress(false);
+            router.push('/assessment/test' as Href);
+          }}
+        >
+          <Text style={[styles.btnOutlineText, { color: theme.text }]}>重新开始测试</Text>
+        </Pressable>
+      )}
     </ScrollView>
   );
 }
@@ -161,5 +197,9 @@ const styles = StyleSheet.create({
   testPrompt: { fontSize: 13, opacity: 0.75, lineHeight: 18 },
   btn: { paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 4 },
   btnText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  btnOutline: { paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 12, borderWidth: 1 },
+  btnOutlineText: { fontSize: 17, fontWeight: '800' },
   err: { color: '#c62828', fontSize: 13, marginVertical: 8 },
+  progressNotice: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  progressText: { flex: 1, fontSize: 14, lineHeight: 20, fontWeight: '600' },
 });

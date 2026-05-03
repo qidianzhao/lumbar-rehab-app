@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from jose import JWTError, jwt
+from passlib.context import CryptContext
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +10,19 @@ from app.config import settings
 from app.models.user import User
 from app.schemas.auth import TokenResponse
 from app.services.sms_service import generate_code, send_sms
+
+# 密码哈希上下文
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def hash_password(password: str) -> str:
+    """哈希密码"""
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """验证密码"""
+    return pwd_context.verify(plain_password, hashed_password)
 
 
 def _jwt_secret() -> str:
@@ -113,6 +127,37 @@ async def login_with_sms_code(
     user = await login_or_register(db, phone)
     tokens = create_jwt_tokens(user.id)
     return user, tokens
+
+
+async def login_with_password(
+    db: AsyncSession,
+    phone: str,
+    password: str,
+) -> tuple[User, TokenResponse] | None:
+    """使用手机号和密码登录"""
+    result = await db.execute(select(User).where(User.phone == phone))
+    user = result.scalar_one_or_none()
+
+    if user is None or user.password_hash is None:
+        return None
+
+    if not verify_password(password, user.password_hash):
+        return None
+
+    tokens = create_jwt_tokens(user.id)
+    return user, tokens
+
+
+async def set_user_password(db: AsyncSession, user_id: int, password: str) -> None:
+    """设置或修改用户密码"""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        raise ValueError("用户不存在")
+
+    user.password_hash = hash_password(password)
+    await db.commit()
 
 
 def refresh_access_token(refresh_token: str) -> str | None:

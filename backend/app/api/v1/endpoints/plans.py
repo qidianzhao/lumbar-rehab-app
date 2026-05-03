@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.endpoints.actions import _build_video_url
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.models.action import Action
 from app.models.training_plan import PlanStatus, TrainingPlan
 from app.schemas.common import APIResponse
 from app.schemas.training_plan import PlanDayResponse, PlanExerciseResponse, PlanGenerateRequest, TrainingPlanResponse
@@ -27,11 +29,25 @@ def _compute_progress_week(plan: TrainingPlan) -> int:
     return max(1, min(plan.estimated_weeks, weeks_elapsed))
 
 
-def _plan_to_response(plan: TrainingPlan) -> TrainingPlanResponse:
+async def _plan_to_response(plan: TrainingPlan, db: AsyncSession) -> TrainingPlanResponse:
     days_sorted = sorted(
         plan.days,
         key=lambda d: (d.week_number, d.day_number),
     )
+
+    # 收集所有需要的action_id
+    action_ids = set()
+    for d in days_sorted:
+        for ex in d.exercises:
+            action_ids.add(ex.action_id)
+
+    # 批量加载所有actions
+    action_map = {}
+    if action_ids:
+        result = await db.execute(select(Action).where(Action.id.in_(action_ids)))
+        actions = result.scalars().all()
+        action_map = {act.id: act for act in actions}
+
     return TrainingPlanResponse(
         id=plan.id,
         user_id=plan.user_id,
@@ -55,7 +71,20 @@ def _plan_to_response(plan: TrainingPlan) -> TrainingPlanResponse:
                 title=d.title,
                 estimated_duration=d.estimated_duration,
                 exercises=sorted(
-                    [PlanExerciseResponse.model_validate(ex) for ex in d.exercises],
+                    [
+                        PlanExerciseResponse(
+                            id=ex.id,
+                            action_id=ex.action_id,
+                            name=ex.name,
+                            phase=ex.phase,
+                            sets=ex.sets,
+                            reps=ex.reps,
+                            rest_seconds=ex.rest_seconds,
+                            sort_order=ex.sort_order,
+                            video_url=_build_video_url(action_map.get(ex.action_id).video_url) if ex.action_id in action_map and action_map.get(ex.action_id).video_url else None,
+                        )
+                        for ex in d.exercises
+                    ],
                     key=lambda e: e.sort_order,
                 ),
             )
@@ -89,7 +118,7 @@ async def generate_training_plan(
     loaded = await plan_generator.load_plan_with_days(db, plan.id)
     if loaded is None:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="计划创建后加载失败")
-    return APIResponse(code=0, message="ok", data=_plan_to_response(loaded))
+    return APIResponse(code=0, message="ok", data=await _plan_to_response(loaded, db))
 
 
 @router.get("/current", response_model=APIResponse[TrainingPlanResponse | None])
@@ -119,7 +148,7 @@ async def get_current_plan(
     loaded = await plan_generator.load_plan_with_days(db, plan.id)
     if loaded is None:
         return APIResponse(code=0, message="ok", data=None)
-    return APIResponse(code=0, message="ok", data=_plan_to_response(loaded))
+    return APIResponse(code=0, message="ok", data=await _plan_to_response(loaded, db))
 
 
 @router.get("/{plan_id}", response_model=APIResponse[TrainingPlanResponse])
@@ -132,7 +161,7 @@ async def get_plan_detail(
     loaded = await plan_generator.load_plan_with_days(db, plan_id)
     if loaded is None or loaded.user_id != user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="计划不存在")
-    return APIResponse(code=0, message="ok", data=_plan_to_response(loaded))
+    return APIResponse(code=0, message="ok", data=await _plan_to_response(loaded, db))
 
 
 @router.post("/{plan_id}/confirm", response_model=APIResponse[TrainingPlanResponse])
@@ -159,4 +188,4 @@ async def confirm_plan(
     refreshed = await plan_generator.load_plan_with_days(db, plan_id)
     if refreshed is None:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认后加载失败")
-    return APIResponse(code=0, message="ok", data=_plan_to_response(refreshed))
+    return APIResponse(code=0, message="ok", data=await _plan_to_response(refreshed, db))

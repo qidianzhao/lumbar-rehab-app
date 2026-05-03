@@ -39,6 +39,7 @@ export default function TrainingSessionScreen() {
   const skipCurrentAction = useTrainingStore((s) => s.skipCurrentAction);
   const finishTraining = useTrainingStore((s) => s.finishTraining);
   const isWorkoutFlowDone = useTrainingStore((s) => s.isWorkoutFlowDone);
+  const reset = useTrainingStore((s) => s.reset);
 
   const [phase, setPhase] = useState<Phase>('exercising');
   const [countdown, setCountdown] = useState(0);
@@ -48,6 +49,7 @@ export default function TrainingSessionScreen() {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   const pausedRef = useRef(false);
   const prevActionIndexRef = useRef(-1);
@@ -95,48 +97,55 @@ export default function TrainingSessionScreen() {
 
   // 倒计时归零时自动推进
   useEffect(() => {
-    if (countdown !== 0 || phase === 'finished') return;
-    if (!current) return;
+    if (countdown !== 0 || phase === 'finished' || !current) return;
 
-    if (phase === 'exercising') {
-      // 这组结束 → 提交 → 判断是否进入休息或下一动作
-      void (async () => {
-        setBusy(true);
-        try {
-          const prevIdx = currentActionIndex;
-          const prevSet = currentSet;
-          await advanceSet();
-          const s = useTrainingStore.getState();
-
-          if (s.isWorkoutFlowDone()) {
-            setPhase('finished');
-            if (voiceEnabled) speakText('训练完成，干得漂亮！').catch(() => {});
-            return;
-          }
-
-          if (s.currentActionIndex === prevIdx) {
-            // 同一动作下一组 → 休息
-            setPhase('resting');
-            setCountdown(current.rest_seconds);
-            if (voiceEnabled) speakText(`这组完成，休息${current.rest_seconds}秒`).catch(() => {});
-            player.pause();
-          } else {
-            // 下一动作，由 currentActionIndex 变化触发上面的 useEffect
-          }
-        } finally {
-          setBusy(false);
-        }
-      })();
-    } else if (phase === 'resting') {
-      // 休息结束 → 开始下一组
-      setPhase('exercising');
-      setCountdown(current.set_duration_seconds);
-      if (voiceEnabled) speakText('休息结束，开始下一组').catch(() => {});
-      if (current.video_url && !pausedRef.current) {
-        try { player.play(); } catch (e) { console.warn('播放失败:', e); }
+    const handleCountdownZero = async () => {
+      if (phase === 'exercising') {
+        await handleExerciseComplete();
+      } else if (phase === 'resting') {
+        handleRestComplete();
       }
+    };
+
+    void handleCountdownZero();
+  }, [countdown, phase, current]);
+
+  // 处理训练组完成
+  const handleExerciseComplete = async () => {
+    setBusy(true);
+    try {
+      const prevIdx = currentActionIndex;
+      await advanceSet();
+      const s = useTrainingStore.getState();
+
+      if (s.isWorkoutFlowDone()) {
+        setPhase('finished');
+        if (voiceEnabled) speakText('训练完成，干得漂亮！').catch(() => {});
+        return;
+      }
+
+      if (s.currentActionIndex === prevIdx) {
+        // 同一动作下一组 → 进入休息
+        setPhase('resting');
+        setCountdown(current.rest_seconds);
+        if (voiceEnabled) speakText(`这组完成，休息${current.rest_seconds}秒`).catch(() => {});
+        player.pause();
+      }
+      // 如果是下一动作，由 currentActionIndex 变化触发视频加载
+    } finally {
+      setBusy(false);
     }
-  }, [countdown, phase]);
+  };
+
+  // 处理休息完成
+  const handleRestComplete = () => {
+    setPhase('exercising');
+    setCountdown(current.set_duration_seconds);
+    if (voiceEnabled) speakText('休息结束，开始下一组').catch(() => {});
+    if (current.video_url && !pausedRef.current) {
+      try { player.play(); } catch (e) { console.warn('播放失败:', e); }
+    }
+  };
 
   // 暂停/恢复控制
   useEffect(() => {
@@ -159,6 +168,7 @@ export default function TrainingSessionScreen() {
       setBusy(true);
       try {
         await finishTraining();
+        reset(); // 清除持久化的训练状态
         router.replace('/training/report' as Href);
       } finally { setBusy(false); }
     }, 3000);
@@ -229,9 +239,19 @@ export default function TrainingSessionScreen() {
     prevActionIndexRef.current = currentActionIndex;
 
     void (async () => {
+      setVideoError(null);
       const videoUrl = await getVideoUrl(current);
+
       if (videoUrl) {
-        player.replace({ uri: videoUrl });
+        try {
+          player.replace({ uri: videoUrl });
+        } catch (e) {
+          console.warn('视频加载失败:', e);
+          setVideoError('视频加载失败');
+        }
+      } else if (!isOnline && current.video_url) {
+        // 离线且无缓存
+        setVideoError('离线模式下视频未下载，请联网后下载视频');
       }
 
       setPhase('exercising');
@@ -312,6 +332,12 @@ export default function TrainingSessionScreen() {
             <Text style={styles.videoPlaceholderText}>暂无视频</Text>
           </View>
         )}
+        {videoError ? (
+          <View style={styles.videoErrorOverlay}>
+            <FontAwesome name="exclamation-triangle" size={24} color="#fff" />
+            <Text style={styles.videoErrorText}>{videoError}</Text>
+          </View>
+        ) : null}
         <View style={styles.countdownOverlay}>
           <Text style={styles.countdownText}>{countdown}</Text>
           <Text style={styles.countdownLabel}>{phase === 'resting' ? '休息' : '秒'}</Text>
@@ -372,6 +398,8 @@ const styles = StyleSheet.create({
   video: { width: '100%', height: '100%', backgroundColor: '#000' },
   videoPlaceholder: { width: '100%', height: '100%', backgroundColor: '#111', alignItems: 'center', justifyContent: 'center', gap: 8 },
   videoPlaceholderText: { color: '#aaa' },
+  videoErrorOverlay: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: 'rgba(244, 67, 54, 0.9)', paddingVertical: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  videoErrorText: { flex: 1, color: '#fff', fontSize: 14, fontWeight: '600' },
   countdownOverlay: { position: 'absolute', bottom: 8, right: 12, alignItems: 'center' },
   countdownText: { fontSize: 48, fontWeight: '900', color: '#fff', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 4 },
   countdownLabel: { fontSize: 14, color: '#fff', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 4 },

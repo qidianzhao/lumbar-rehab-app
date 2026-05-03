@@ -118,6 +118,7 @@ function SingleChip({
 export default function HealthProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isFirstTime, setIsFirstTime] = useState(false);
 
   const [height, setHeight] = useState('');
   const [weight, setWeight] = useState('');
@@ -131,6 +132,10 @@ export default function HealthProfileScreen() {
     (async () => {
       try {
         const profile = await getUserHealthProfile();
+        const hasData = profile.height != null || profile.weight != null ||
+                       (profile.disc_segments && profile.disc_segments.length > 0);
+        setIsFirstTime(!hasData);
+
         if (profile.height != null) setHeight(String(profile.height));
         if (profile.weight != null) setWeight(String(profile.weight));
         setDiscSegments(profile.disc_segments ?? []);
@@ -140,6 +145,7 @@ export default function HealthProfileScreen() {
         setExerciseHabit(profile.exercise_habit ?? null);
       } catch {
         // 静默处理，保持空表单
+        setIsFirstTime(true);
       } finally {
         setLoading(false);
       }
@@ -147,29 +153,51 @@ export default function HealthProfileScreen() {
   }, []);
 
   const onSave = useCallback(async () => {
-    const h = parseFloat(height);
-    const w = parseFloat(weight);
-    if (height && (isNaN(h) || h <= 0 || h > 300)) {
-      Alert.alert('提示', '请输入有效身高（cm）');
+    // 验证必填字段
+    if (!height || !weight) {
+      Alert.alert('提示', '请填写身高和体重');
       return;
     }
-    if (weight && (isNaN(w) || w <= 0 || w > 500)) {
-      Alert.alert('提示', '请输入有效体重（kg）');
+    if (discSegments.length === 0) {
+      Alert.alert('提示', '请选择腰部受累节段');
+      return;
+    }
+    if (!discSeverity) {
+      Alert.alert('提示', '请选择腰椎间盘情况');
+      return;
+    }
+    if (!dailySittingHours) {
+      Alert.alert('提示', '请选择日常久坐时长');
+      return;
+    }
+    if (!exerciseHabit) {
+      Alert.alert('提示', '请选择运动习惯');
+      return;
+    }
+
+    const h = parseFloat(height);
+    const w = parseFloat(weight);
+    if (isNaN(h) || h <= 0 || h > 300) {
+      Alert.alert('提示', '请输入有效身高（50-300cm）');
+      return;
+    }
+    if (isNaN(w) || w <= 0 || w > 500) {
+      Alert.alert('提示', '请输入有效体重（20-500kg）');
       return;
     }
 
     setSaving(true);
     try {
       await updateUserHealthProfile({
-        height: height ? h : null,
-        weight: weight ? w : null,
+        height: h,
+        weight: w,
         disc_segments: discSegments,
         disc_severity: discSeverity,
         other_conditions: otherConditions,
         daily_sitting_hours: dailySittingHours,
         exercise_habit: exerciseHabit,
       });
-      router.back();
+      Alert.alert('成功', '健康档案已保存', [{ text: '确定', onPress: () => router.back() }]);
     } catch (e) {
       Alert.alert('保存失败', formatApiError(e));
     } finally {
@@ -188,9 +216,18 @@ export default function HealthProfileScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {isFirstTime && (
+          <View style={styles.guideCard}>
+            <Text style={styles.guideTitle}>👋 欢迎填写健康档案</Text>
+            <Text style={styles.guideText}>
+              完善健康档案可以帮助我们为您生成更适合的训练计划。所有信息仅用于训练计划定制，不会对外公开。
+            </Text>
+          </View>
+        )}
+
         <View style={styles.card}>
 
-          <Text style={styles.label}>身高（cm）</Text>
+          <Text style={styles.label}>身高（cm）<Text style={styles.required}>*</Text></Text>
           <TextInput
             style={styles.input}
             placeholder="例如：175"
@@ -199,7 +236,7 @@ export default function HealthProfileScreen() {
             onChangeText={setHeight}
           />
 
-          <Text style={styles.label}>体重（kg）</Text>
+          <Text style={styles.label}>体重（kg）<Text style={styles.required}>*</Text></Text>
           <TextInput
             style={styles.input}
             placeholder="例如：70"
@@ -208,19 +245,19 @@ export default function HealthProfileScreen() {
             onChangeText={setWeight}
           />
 
-          <Text style={styles.label}>腰部受累节段（可多选）</Text>
+          <Text style={styles.label}>腰部受累节段（可多选）<Text style={styles.required}>*</Text></Text>
           <MultiChip options={LUMBAR_LEVELS} selected={discSegments} onChange={setDiscSegments} />
 
-          <Text style={[styles.label, styles.labelMt]}>腰椎间盘情况</Text>
+          <Text style={[styles.label, styles.labelMt]}>腰椎间盘情况<Text style={styles.required}>*</Text></Text>
           <SingleChip options={DISC_CONDITIONS} selected={discSeverity} onChange={setDiscSeverity} />
 
           <Text style={[styles.label, styles.labelMt]}>合并情况（可多选）</Text>
           <MultiChip options={ADDITIONAL_CONDITIONS} selected={otherConditions} onChange={setOtherConditions} />
 
-          <Text style={[styles.label, styles.labelMt]}>日常久坐时长</Text>
+          <Text style={[styles.label, styles.labelMt]}>日常久坐时长<Text style={styles.required}>*</Text></Text>
           <SingleChip options={SITTING_DURATIONS} selected={dailySittingHours} onChange={setDailySittingHours} />
 
-          <Text style={[styles.label, styles.labelMt]}>运动习惯</Text>
+          <Text style={[styles.label, styles.labelMt]}>运动习惯<Text style={styles.required}>*</Text></Text>
           <SingleChip options={EXERCISE_HABITS} selected={exerciseHabit} onChange={setExerciseHabit} />
 
         </View>
@@ -244,6 +281,25 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f5f5f5' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll: { padding: 20, paddingBottom: 40 },
+  guideCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  guideTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  guideText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -255,6 +311,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   label: { fontSize: 14, color: '#666', marginBottom: 8 },
+  required: { color: '#f44336', marginLeft: 2 },
   labelMt: { marginTop: 16 },
   input: {
     borderWidth: 1,

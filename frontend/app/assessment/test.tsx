@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -26,6 +27,7 @@ import {
 import { api } from '@/src/api/client';
 
 const AI_CHAT_URL = '/ai/chat';
+const ASSESSMENT_PROGRESS_KEY = '@assessment_progress';
 
 // ── 视频占位组件 ──────────────────────────────────────────────────────────────
 
@@ -130,7 +132,7 @@ export default function AssessmentTestScreen() {
   const currentVideoUrl = current ? (videoUrls[current.action_id] ?? null) : null;
   const player = useVideoPlayer(null, (p) => { p.loop = true; p.muted = true; });
 
-  // 数据加载
+  // 数据加载 + 恢复进度
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -148,6 +150,19 @@ export default function AssessmentTestScreen() {
           } catch { urls[it.action_id] = null; }
         }));
         if (!cancelled) setVideoUrls(urls);
+
+        // 恢复保存的进度
+        try {
+          const saved = await AsyncStorage.getItem(ASSESSMENT_PROGRESS_KEY);
+          if (saved && !cancelled) {
+            const progress = JSON.parse(saved);
+            setIndex(progress.index ?? 0);
+            setValues(progress.values ?? {});
+            setNotes(progress.notes ?? {});
+          }
+        } catch (e) {
+          console.log('恢复进度失败:', e);
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : '加载失败');
       } finally {
@@ -182,6 +197,24 @@ export default function AssessmentTestScreen() {
   const canNext = current ? typeof currentValue === 'number' && Number.isFinite(currentValue) && currentValue > 0 : false;
   const ratingOptions = useMemo(() => [1, 2, 3, 4, 5], []);
 
+  // 保存进度到本地存储
+  useEffect(() => {
+    if (items.length === 0) return;
+    const saveProgress = async () => {
+      try {
+        await AsyncStorage.setItem(ASSESSMENT_PROGRESS_KEY, JSON.stringify({
+          index,
+          values,
+          notes,
+          timestamp: new Date().toISOString(),
+        }));
+      } catch (e) {
+        console.log('保存进度失败:', e);
+      }
+    };
+    void saveProgress();
+  }, [index, values, notes, items.length]);
+
   function setCurrentValue(v: number) {
     if (!current) return;
     setValues((prev) => ({ ...prev, [current.action_id]: v }));
@@ -210,16 +243,21 @@ export default function AssessmentTestScreen() {
       }
     } catch (e) {
       console.log('AI 对话错误:', e);
+      setAiMessage('AI 对话失败，请稍后重试');
+      await speakText('AI 对话失败，请稍后重试');
     }
   }, [current]);
 
   const onMicPressIn = useCallback(async () => {
     setIsRecording(true);
     setAiMessage(null);
-    try { await startRecording(); }
-    catch (e) {
+    try {
+      await startRecording();
+    } catch (e) {
       console.log('录音启动失败:', e);
       setIsRecording(false);
+      setAiMessage('录音启动失败，请检查麦克风权限');
+      await speakText('录音启动失败，请检查麦克风权限');
     }
   }, []);
 
@@ -236,7 +274,8 @@ export default function AssessmentTestScreen() {
       }
     } catch (e) {
       console.log('识别错误:', e);
-      setAiMessage('识别失败，请重试');
+      setAiMessage('语音识别失败，请重试');
+      await speakText('语音识别失败，请重试');
     }
   }, [isRecording, sendToAI]);
 
@@ -251,6 +290,8 @@ export default function AssessmentTestScreen() {
     setError(null);
     try {
       const report = await assessmentApi.submitAssessment({ items: payload });
+      // 提交成功后清除保存的进度
+      await AsyncStorage.removeItem(ASSESSMENT_PROGRESS_KEY);
       router.replace((`/assessment/result?id=${report.id}`) as unknown as Href);
     } catch (e) {
       setError(e instanceof Error ? e.message : '提交失败');

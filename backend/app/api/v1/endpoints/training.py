@@ -151,12 +151,29 @@ async def create_training_session(
 
     await db.commit()
 
+    # 计算用户当前进度周数，用于显示正确的标题
+    created = plan.created_at
+    if created is None:
+        progress_week = 1
+    else:
+        now = datetime.now(timezone.utc)
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        weeks_elapsed = (now - created).days // 7 + 1
+        progress_week = max(1, min(plan.estimated_weeks, weeks_elapsed))
+
+    # 计算本周第几练
+    training_days_this_week = sorted([d for d in plan.days if d.week_number == progress_week], key=lambda d: d.day_number)
+    day_idx = next((i + 1 for i, d in enumerate(training_days_this_week) if d.id == plan_day.id), 1)
+    weekday_cn = ["一", "二", "三", "四", "五", "六", "日"][plan_day.day_number - 1]
+    dynamic_title = f"第{progress_week}周 · 第{day_idx}练（周{weekday_cn}）"
+
     return APIResponse(
         code=0,
         message="ok",
         data=SessionStartResponse(
             session_id=ts.id,
-            plan_day_title=plan_day.title,
+            plan_day_title=dynamic_title,
             safety_notice=safety_notice,
             degraded=degraded,
             actions=action_items,

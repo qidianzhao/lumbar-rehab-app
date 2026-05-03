@@ -18,6 +18,7 @@ class PlanExerciseResponse(BaseModel):
     reps: int
     rest_seconds: int
     sort_order: int
+    video_url: str | None = None
 
     model_config = {"from_attributes": True}
 

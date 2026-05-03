@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import * as planApi from '@/src/services/planApi';
+import * as trainingApi from '@/src/services/trainingApi';
 
 const PHASE_LABEL: Record<string, string> = {
   warmup: '热身', core: '核心', stretch: '拉伸',
@@ -17,21 +18,51 @@ export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
   const [plan, setPlan] = useState<planApi.TrainingPlan | null | undefined>(undefined);
+  const [completedDays, setCompletedDays] = useState(0);
 
   useFocusEffect(useCallback(() => {
     let cancelled = false;
-    planApi.getCurrentPlan()
-      .then((p) => { if (!cancelled) setPlan(p); })
-      .catch(() => { if (!cancelled) setPlan(null); });
+
+    async function loadData() {
+      try {
+        const p = await planApi.getCurrentPlan();
+        if (cancelled) return;
+        setPlan(p);
+
+        if (p) {
+          // 获取本周已完成的训练天数
+          const progressWeek = p.progress_week ?? 1;
+          const thisWeekDayIds = p.days
+            .filter((d) => d.week_number === progressWeek)
+            .map((d) => d.id);
+
+          if (thisWeekDayIds.length > 0) {
+            const history = await trainingApi.getSessionHistory(1, 100);
+            const completedDayIds = new Set(
+              history.items
+                .filter((s) => s.status === 'completed' && thisWeekDayIds.includes(s.plan_day_id))
+                .map((s) => s.plan_day_id)
+            );
+            if (!cancelled) setCompletedDays(completedDayIds.size);
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setPlan(null);
+          setCompletedDays(0);
+        }
+      }
+    }
+
+    void loadData();
     return () => { cancelled = true; };
   }, []));
 
   const todayDayNum = new Date().getDay() || 7;
   const progressWeek = plan?.progress_week ?? 1;
   const thisWeekDays = plan?.days.filter((d) => d.week_number === progressWeek) ?? [];
-  const todayDay = thisWeekDays.find((d) => d.day_number === todayDayNum) ?? thisWeekDays[0] ?? null;
+  const todayDay = thisWeekDays.find((d) => d.day_number === todayDayNum) ?? null;
 
-  const completedDays = thisWeekDays.length;
   const totalDays = plan?.weekly_frequency ?? 0;
 
   async function onStartTraining() {

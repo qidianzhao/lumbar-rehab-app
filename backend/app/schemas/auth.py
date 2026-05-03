@@ -12,6 +12,15 @@ class LoginRequest(BaseModel):
     code: str
 
 
+class PasswordLoginRequest(BaseModel):
+    phone: str
+    password: str
+
+
+class SetPasswordRequest(BaseModel):
+    password: str
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 
