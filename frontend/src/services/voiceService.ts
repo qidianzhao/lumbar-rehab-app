@@ -9,6 +9,7 @@ let _recording: Audio.Recording | null = null;
 let _sound: Audio.Sound | null = null;
 let _bgMusic: Audio.Sound | null = null;
 let _speaking = false;
+let _recognizing = false; // 防止并发识别
 
 async function _ensureAudioMode(recording: boolean) {
   await Audio.setAudioModeAsync({
@@ -45,7 +46,7 @@ export async function resumeBgMusic(): Promise<void> {
 }
 
 export async function startRecording(): Promise<void> {
-  if (_recording) return;
+  if (_recording || _recognizing) return; // 防止在识别过程中开始新录音
   const { status } = await Audio.requestPermissionsAsync();
   if (status !== 'granted') throw new Error('麦克风权限未授权');
 
@@ -60,7 +61,8 @@ export async function startRecording(): Promise<void> {
 }
 
 export async function stopRecordingAndRecognize(): Promise<string> {
-  if (!_recording) return '';
+  if (!_recording || _recognizing) return '';
+  _recognizing = true; // 设置识别锁
   try {
     await _recording.stopAndUnloadAsync();
     const uri = _recording.getURI();
@@ -111,6 +113,7 @@ export async function stopRecordingAndRecognize(): Promise<string> {
     _recording = null;
     throw e;
   } finally {
+    _recognizing = false; // 释放识别锁
     await _ensureAudioMode(false);
   }
 }
