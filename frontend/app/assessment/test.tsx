@@ -274,17 +274,17 @@ export default function AssessmentTestScreen() {
       if (text) {
         await sendToAI(text);
       } else {
-        setAiMessage('没听清，请再说一次');
+        setAiMessage('没听清，请再说一次或手动输入');
         await speakText('没听清，请再说一次');
       }
     } catch (e: any) {
       console.log('识别错误:', e);
       if (e?.message?.includes('超时')) {
-        setAiMessage('语音识别超时，网络较慢，请重试');
+        setAiMessage('语音识别超时，请重试或手动输入');
         await speakText('语音识别超时，请重试');
       } else {
-        setAiMessage('语音识别失败，请重试');
-        await speakText('语音识别失败，请重试');
+        setAiMessage('语音识别失败，请手动输入');
+        await speakText('语音识别失败，请手动输入');
       }
     }
   }, [isRecording, sendToAI]);
