@@ -129,7 +129,11 @@ export default function TrainingSessionScreen() {
         // 同一动作下一组 → 进入休息
         setPhase('resting');
         setCountdown(current.rest_seconds);
-        if (voiceEnabled) speakText(`这组完成，休息${current.rest_seconds}秒`).catch(() => {});
+        if (voiceEnabled) {
+          const encouragements = ['很好！', '做得不错！', '继续保持！', '太棒了！', '加油！'];
+          const randomEncouragement = encouragements[Math.floor(Math.random() * encouragements.length)];
+          speakText(`${randomEncouragement}这组完成，休息${current.rest_seconds}秒`).catch(() => {});
+        }
         player.pause();
       }
       // 如果是下一动作，由 currentActionIndex 变化触发视频加载
