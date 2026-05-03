@@ -9,6 +9,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { useTrainingStore } from '@/src/stores/trainingStore';
 import { useAIVoiceChat } from '@/src/hooks/useAIVoiceChat';
 import { handleError } from '@/src/utils/errorHandler';
+import { logger } from '@/src/utils/logger';
 import {
   speakText,
   stopSpeaking,
@@ -172,7 +173,7 @@ export default function TrainingSessionScreen() {
       speakText('休息结束，开始！').catch(() => {});
     }
     if (current.video_url && !pausedRef.current) {
-      try { player.play(); } catch (e) { console.warn('播放失败:', e); }
+      try { player.play(); } catch (e) { logger.warn('播放失败:', e); }
     }
   };
 
@@ -187,7 +188,7 @@ export default function TrainingSessionScreen() {
       stopSpeaking();
     } else {
       if (phase === 'exercising' && current?.video_url) {
-        try { player.play(); } catch (e) { console.warn('播放失败:', e); }
+        try { player.play(); } catch (e) { logger.warn('播放失败:', e); }
       }
       resumeBgMusic().catch(() => {});
       // 只在恢复时（从暂停变为非暂停）播报
@@ -281,7 +282,7 @@ export default function TrainingSessionScreen() {
         try {
           player.replace({ uri: videoUrl });
         } catch (e) {
-          console.warn('视频加载失败:', handleError(e));
+          logger.warn('视频加载失败:', handleError(e));
           setVideoError('视频加载失败');
         }
       } else if (!isOnline && current.video_url) {
@@ -303,17 +304,17 @@ export default function TrainingSessionScreen() {
         speakText(tip)
           .then(() => {
             if (videoUrl && !pausedRef.current) {
-              try { player.play(); } catch (e) { console.warn('播放失败:', e); }
+              try { player.play(); } catch (e) { logger.warn('播放失败:', e); }
             }
           })
           .catch(() => {
             if (videoUrl && !pausedRef.current) {
-              try { player.play(); } catch (e) { console.warn('播放失败:', e); }
+              try { player.play(); } catch (e) { logger.warn('播放失败:', e); }
             }
           });
       } else {
         if (videoUrl) {
-          try { player.play(); } catch (e) { console.warn('播放失败:', e); }
+          try { player.play(); } catch (e) { logger.warn('播放失败:', e); }
         }
       }
     })();

@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { freeChat, getUsageLimit, type ChatMessage } from '@/src/services/chatApi';
+import { logger } from '@/src/utils/logger';
 
 const CHAT_HISTORY_KEY = 'chat_history';
 const MAX_HISTORY_COUNT = 50;
@@ -63,7 +64,7 @@ export default function ChatScreen() {
         setMessages(parsed.map(m => ({ ...m, timestamp: new Date(m.timestamp) })));
       }
     } catch (error) {
-      console.error('加载聊天记录失败:', error);
+      logger.error('加载聊天记录失败:', error);
     }
   };
 
@@ -72,7 +73,7 @@ export default function ChatScreen() {
       const toSave = msgs.slice(-MAX_HISTORY_COUNT);
       await AsyncStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(toSave));
     } catch (error) {
-      console.error('保存聊天记录失败:', error);
+      logger.error('保存聊天记录失败:', error);
     }
   };
 
@@ -90,7 +91,7 @@ export default function ChatScreen() {
             try {
               await AsyncStorage.removeItem(CHAT_HISTORY_KEY);
             } catch (error) {
-              console.error('清空聊天记录失败:', error);
+              logger.error('清空聊天记录失败:', error);
             }
           },
         },
@@ -103,7 +104,7 @@ export default function ChatScreen() {
       const limit = await getUsageLimit();
       setRemaining(limit.remaining);
     } catch (error) {
-      console.error('获取配额失败:', error);
+      logger.error('获取配额失败:', error);
     }
   };
 
@@ -158,7 +159,7 @@ export default function ChatScreen() {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     } catch (error: any) {
-      console.error('发送消息失败:', error);
+      logger.error('发送消息失败:', error);
       Alert.alert('错误', error.message || '发送失败，请重试');
 
       setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));

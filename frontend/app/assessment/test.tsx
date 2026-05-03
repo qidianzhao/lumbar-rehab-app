@@ -18,6 +18,7 @@ import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import type { AssessmentTestItem, MetricType, TestItemSubmit } from '@/src/services/assessmentApi';
 import * as assessmentApi from '@/src/services/assessmentApi';
+import { logger } from '@/src/utils/logger';
 import { useAIVoiceChat } from '@/src/hooks/useAIVoiceChat';
 import {
   speakText,
@@ -175,7 +176,7 @@ export default function AssessmentTestScreen() {
             setNotes(progress.notes ?? {});
           }
         } catch (e) {
-          console.log('恢复进度失败:', e);
+          logger.error('恢复进度失败:', e);
         }
       } catch (e) {
         if (!cancelled) {
@@ -225,7 +226,7 @@ export default function AssessmentTestScreen() {
           timestamp: new Date().toISOString(),
         }));
       } catch (e) {
-        console.log('保存进度失败:', e);
+        logger.error('保存进度失败:', e);
       }
     };
     void saveProgress();

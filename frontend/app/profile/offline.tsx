@@ -16,6 +16,7 @@ import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import * as offlineService from '@/src/services/offlineService';
 import * as planApi from '@/src/services/planApi';
+import { logger } from '@/src/utils/logger';
 
 export default function OfflineManagementScreen() {
   const colorScheme = useColorScheme();
@@ -47,7 +48,7 @@ export default function OfflineManagementScreen() {
         offlineData.training_sessions.length + offlineData.checkins.length
       );
     } catch (error) {
-      console.error('加载状态失败:', error);
+      logger.error('加载状态失败:', error);
     } finally {
       setLoading(false);
     }
