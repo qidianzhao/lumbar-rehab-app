@@ -277,10 +277,15 @@ export default function AssessmentTestScreen() {
         setAiMessage('没听清，请再说一次');
         await speakText('没听清，请再说一次');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.log('识别错误:', e);
-      setAiMessage('语音识别失败，请重试');
-      await speakText('语音识别失败，请重试');
+      if (e?.message?.includes('超时')) {
+        setAiMessage('语音识别超时，网络较慢，请重试');
+        await speakText('语音识别超时，请重试');
+      } else {
+        setAiMessage('语音识别失败，请重试');
+        await speakText('语音识别失败，请重试');
+      }
     }
   }, [isRecording, sendToAI]);
 

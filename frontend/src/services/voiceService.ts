@@ -80,19 +80,36 @@ export async function stopRecordingAndRecognize(): Promise<string> {
     const formData = new FormData();
     formData.append('audio', { uri, name: `audio.${ext}`, type: mimeType } as any);
 
-    const res = await api.post<{ code: number; data: { text: string } }>(
-      ASR_URL,
-      formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
-    );
-    console.log('ASR 响应:', JSON.stringify(res.data));
-    const text = res.data?.data?.text ?? '';
-    console.log('ASR 识别文字:', text);
-    return text;
+    // 添加10秒超时
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const res = await api.post<{ code: number; data: { text: string } }>(
+        ASR_URL,
+        formData,
+        {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          signal: controller.signal as any
+        }
+      );
+      clearTimeout(timeoutId);
+      console.log('ASR 响应:', JSON.stringify(res.data));
+      const text = res.data?.data?.text ?? '';
+      console.log('ASR 识别文字:', text);
+      return text;
+    } catch (e: any) {
+      clearTimeout(timeoutId);
+      if (e.name === 'AbortError' || e.message?.includes('timeout')) {
+        console.log('ASR 超时');
+        throw new Error('语音识别超时，请重试');
+      }
+      throw e;
+    }
   } catch (e) {
     console.log('ASR 错误:', e);
     _recording = null;
-    return '';
+    throw e;
   } finally {
     await _ensureAudioMode(false);
   }

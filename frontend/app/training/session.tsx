@@ -239,7 +239,12 @@ export default function TrainingSessionScreen() {
       });
       const reply = res.data?.data?.reply ?? '';
       if (reply) { setAiMessage(reply); await speakText(reply); }
-    } catch { /* 静默 */ }
+    } catch (e: any) {
+      if (e?.message?.includes('超时')) {
+        Alert.alert('语音识别超时', '网络较慢，请重试');
+      }
+      // 其他错误静默处理
+    }
   }, [isRecording, current, currentSet]);
 
 
