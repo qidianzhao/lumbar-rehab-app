@@ -132,7 +132,9 @@ export default function TrainingSessionScreen() {
       setPhase('exercising');
       setCountdown(current.set_duration_seconds);
       if (voiceEnabled) speakText('休息结束，开始下一组').catch(() => {});
-      if (current.video_url && !pausedRef.current) player.play();
+      if (current.video_url && !pausedRef.current) {
+        try { player.play(); } catch (e) { console.warn('播放失败:', e); }
+      }
     }
   }, [countdown, phase]);
 
@@ -143,7 +145,9 @@ export default function TrainingSessionScreen() {
       pauseBgMusic().catch(() => {});
       stopSpeaking();
     } else {
-      if (phase === 'exercising' && current?.video_url) player.play();
+      if (phase === 'exercising' && current?.video_url) {
+        try { player.play(); } catch (e) { console.warn('播放失败:', e); }
+      }
       resumeBgMusic().catch(() => {});
     }
   }, [paused]);
@@ -240,10 +244,20 @@ export default function TrainingSessionScreen() {
           ? `第${currentActionIndex + 1}个动作：${current.name}，${current.tips}`
           : `第${currentActionIndex + 1}个动作：${current.name}，注意保持正确姿势`;
         speakText(tip)
-          .then(() => { if (videoUrl && !pausedRef.current) player.play(); })
-          .catch(() => { if (videoUrl && !pausedRef.current) player.play(); });
+          .then(() => {
+            if (videoUrl && !pausedRef.current) {
+              try { player.play(); } catch (e) { console.warn('播放失败:', e); }
+            }
+          })
+          .catch(() => {
+            if (videoUrl && !pausedRef.current) {
+              try { player.play(); } catch (e) { console.warn('播放失败:', e); }
+            }
+          });
       } else {
-        if (videoUrl) player.play();
+        if (videoUrl) {
+          try { player.play(); } catch (e) { console.warn('播放失败:', e); }
+        }
       }
     })();
   }, [currentActionIndex, current, isOnline, voiceEnabled, getVideoUrl]);

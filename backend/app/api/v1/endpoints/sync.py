@@ -19,7 +19,7 @@ from app.schemas.sync import (
     SyncedItem,
     SyncPullResponse,
 )
-from app.models.plan import TrainingPlan
+from app.models.training_plan import TrainingPlan
 
 router = APIRouter()
 

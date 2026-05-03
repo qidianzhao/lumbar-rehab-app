@@ -2,7 +2,7 @@
  * 离线模式服务
  * 负责视频下载、离线数据存储、数据同步
  */
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Network from 'expo-network';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
