@@ -17,16 +17,13 @@ import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import type { AssessmentTestItem, MetricType, TestItemSubmit } from '@/src/services/assessmentApi';
 import * as assessmentApi from '@/src/services/assessmentApi';
+import { useAIVoiceChat } from '@/src/hooks/useAIVoiceChat';
 import {
   speakText,
-  startRecording,
-  stopRecordingAndRecognize,
   startBgMusic,
   stopBgMusic,
 } from '@/src/services/voiceService';
-import { api } from '@/src/api/client';
 
-const AI_CHAT_URL = '/ai/chat';
 const ASSESSMENT_PROGRESS_KEY = '@assessment_progress';
 
 // ── 视频占位组件 ──────────────────────────────────────────────────────────────
@@ -131,12 +128,19 @@ export default function AssessmentTestScreen() {
   const [values, setValues] = useState<Record<number, number>>({});
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [aiMessage, setAiMessage] = useState<string | null>(null);
 
   const current = items[index];
   const currentVideoUrl = current ? (videoUrls[current.action_id] ?? null) : null;
   const player = useVideoPlayer(null, (p) => { p.loop = true; p.muted = true; });
+
+  // 使用统一的AI语音交互Hook
+  const { isRecording, aiMessage, onMicPressIn, onMicPressOut } = useAIVoiceChat({
+    context: {
+      action_name: current?.name,
+      phase: 'assessment',
+    },
+    isOnline: true, // 体能测试页面假设在线
+  });
 
   // 数据加载 + 恢复进度
   useEffect(() => {
@@ -229,81 +233,6 @@ export default function AssessmentTestScreen() {
     if (!current) return;
     setNotes((prev) => ({ ...prev, [current.action_id]: v }));
   }
-
-  // PTT 语音输入
-  const sendToAI = useCallback(async (text: string) => {
-    if (!current) return;
-    console.log('🎤 识别文字:', text);
-    setAiMessage(`你说：${text}`);
-    try {
-      const res = await api.post<{ code: number; data: { reply: string } }>(AI_CHAT_URL, {
-        messages: [{ role: 'user', content: text }],
-        context: { action_name: current.name, phase: 'assessment' },
-      });
-      console.log('AI 回复:', JSON.stringify(res.data));
-      const reply = res.data?.data?.reply ?? '';
-      if (reply) {
-        setAiMessage(reply);
-        await speakText(reply);
-      } else {
-        setAiMessage('AI助手暂时无法回复，请稍后再试');
-        await speakText('AI助手暂时无法回复');
-      }
-    } catch (e: any) {
-      console.log('AI 对话错误:', e);
-      let errorMsg = 'AI助手出错了，请稍后再试';
-
-      if (e?.message?.includes('超时') || e?.message?.includes('timeout')) {
-        errorMsg = 'AI响应超时，请重试';
-      } else if (e?.message?.includes('网络') || e?.message?.includes('Network')) {
-        errorMsg = '网络连接失败，请检查网络';
-      } else if (e?.response?.status === 401) {
-        errorMsg = '登录已过期，请重新登录';
-      } else if (e?.response?.status >= 500) {
-        errorMsg = '服务器繁忙，请稍后再试';
-      }
-
-      setAiMessage(errorMsg);
-      await speakText(errorMsg).catch(() => {});
-      Alert.alert('AI交互失败', errorMsg);
-    }
-  }, [current]);
-
-  const onMicPressIn = useCallback(async () => {
-    setIsRecording(true);
-    setAiMessage(null);
-    try {
-      await startRecording();
-    } catch (e) {
-      console.log('录音启动失败:', e);
-      setIsRecording(false);
-      setAiMessage('录音启动失败，请检查麦克风权限');
-      await speakText('录音启动失败，请检查麦克风权限');
-    }
-  }, []);
-
-  const onMicPressOut = useCallback(async () => {
-    if (!isRecording) return;
-    setIsRecording(false);
-    try {
-      const text = await stopRecordingAndRecognize();
-      if (text) {
-        await sendToAI(text);
-      } else {
-        setAiMessage('没听清，请再说一次或手动输入');
-        await speakText('没听清，请再说一次');
-      }
-    } catch (e: any) {
-      console.log('识别错误:', e);
-      if (e?.message?.includes('超时')) {
-        setAiMessage('语音识别超时，请重试或手动输入');
-        await speakText('语音识别超时，请重试');
-      } else {
-        setAiMessage('语音识别失败，请手动输入');
-        await speakText('语音识别失败，请手动输入');
-      }
-    }
-  }, [isRecording, sendToAI]);
 
   async function onSubmitAll() {
     if (items.length === 0) return;

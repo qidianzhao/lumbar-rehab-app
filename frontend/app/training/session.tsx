@@ -7,11 +7,10 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'rea
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useTrainingStore } from '@/src/stores/trainingStore';
+import { useAIVoiceChat } from '@/src/hooks/useAIVoiceChat';
 import {
   speakText,
   stopSpeaking,
-  startRecording,
-  stopRecordingAndRecognize,
   startBgMusic,
   stopBgMusic,
   pauseBgMusic,
@@ -45,8 +44,6 @@ export default function TrainingSessionScreen() {
   const [phase, setPhase] = useState<Phase>('exercising');
   const [countdown, setCountdown] = useState(0);
   const [paused, setPaused] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
@@ -58,6 +55,17 @@ export default function TrainingSessionScreen() {
 
   const current = actions[currentActionIndex] ?? null;
   const player = useVideoPlayer(null, (p) => { p.loop = true; p.muted = true; });
+
+  // AI语音交互Hook
+  const { isRecording, aiMessage, setAiMessage, onMicPressIn, onMicPressOut } = useAIVoiceChat({
+    isOnline,
+    getContext: () => ({
+      action_name: current?.name ?? '',
+      current_set: currentSet,
+      total_sets: current?.planned_sets ?? 0,
+      phase: current?.phase ?? '',
+    }),
+  });
 
   // 检查网络状态
   useEffect(() => {
@@ -225,62 +233,6 @@ export default function TrainingSessionScreen() {
     }
     finally { setBusy(false); }
   }, [busy, skipCurrentAction, voiceEnabled]);
-
-  const onMicPressIn = useCallback(async () => {
-    if (!isOnline) {
-      Alert.alert('离线模式', 'AI语音功能需要联网使用');
-      return;
-    }
-    setAiMessage(null);
-    setIsRecording(true);
-    stopSpeaking();
-    try { await startRecording(); }
-    catch (e: any) { setIsRecording(false); Alert.alert('录音失败', e?.message ?? '请检查麦克风权限'); }
-  }, [voiceEnabled]);
-
-  const onMicPressOut = useCallback(async () => {
-    if (!isRecording) return;
-    setIsRecording(false);
-    try {
-      const text = await stopRecordingAndRecognize();
-      if (!text || !current) {
-        setAiMessage('没听清，请再说一次');
-        await speakText('没听清，请再说一次');
-        return;
-      }
-      const res = await api.post<{ code: number; data: { reply: string } }>(AI_CHAT_URL, {
-        messages: [{ role: 'user', content: text }],
-        context: { action_name: current.name, current_set: currentSet, total_sets: current.planned_sets, phase: current.phase },
-      });
-      const reply = res.data?.data?.reply ?? '';
-      if (reply) {
-        setAiMessage(reply);
-        await speakText(reply);
-      } else {
-        setAiMessage('AI助手暂时无法回复，请稍后再试');
-        await speakText('AI助手暂时无法回复，请稍后再试');
-      }
-    } catch (e: any) {
-      console.log('语音交互错误:', e);
-      let errorMsg = 'AI助手出错了，请稍后再试';
-
-      if (e?.message?.includes('超时')) {
-        errorMsg = '语音识别超时，请重试';
-      } else if (e?.message?.includes('网络')) {
-        errorMsg = '网络连接失败，请检查网络';
-      } else if (e?.response?.status === 401) {
-        errorMsg = '登录已过期，请重新登录';
-      } else if (e?.response?.status >= 500) {
-        errorMsg = '服务器繁忙，请稍后再试';
-      }
-
-      setAiMessage(errorMsg);
-      await speakText(errorMsg).catch(() => {});
-      Alert.alert('语音交互失败', errorMsg);
-    }
-  }, [isRecording, current, currentSet]);
-
-
 
   // 背景音乐
   useEffect(() => {
