@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(pip show *)",
+      "Bash(xargs grep *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git *)",
+      "Bash(npx tsc *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://192.168.5.136:8080 --connect-timeout 3)",
+      "Bash(ipconfig)",
+      "Bash(curl -s http://192.168.5.144:8000/api/v1/actions/1)",
+      "Bash(curl -s http://192.168.5.144:8080/ -I)",
+      "Bash(xargs basename *)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
+      "Bash(npm run *)",
+      "Bash(npm install *)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(curl *)",
+      "Bash(npx expo *)",
+      "Bash(tee /tmp/backend.log)",
+      "Bash(pkill -f \"uvicorn app.main:app\")",
+      "Bash(awk '{print $2}')",
+      "Bash(xargs kill *)",
+      "Bash(taskkill //F //IM python.exe)",
+      "Bash(npm start *)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(grep -E \"#[0-9a-f]{3,6}\")",
+      "Bash(xargs wc *)",
+      "Bash(xargs ls *)",
+      "Bash(netstat -ano)",
+      "Bash(awk '{print $5}')",
+      "Bash(taskkill *)",
+      "Bash(alembic revision *)",
+      "Bash(psql -U postgres -d ldh_training -f migrations/remove_checkin_unique_constraint.sql)"
+    ]
+  }
+}

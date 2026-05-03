@@ -15,14 +15,7 @@ interface ShareCardResponse {
   session_id: number;
 }
 
-let isSharing = false;
-
 export async function shareTrainingReport(sessionId: number): Promise<void> {
-  if (isSharing) {
-    throw new Error('分享正在进行中，请稍候');
-  }
-
-  isSharing = true;
   try {
     const res = await api.post<ApiEnvelope<ShareCardResponse>>('/share/card', {
       card_type: 'TRAINING_REPORT',
@@ -50,7 +43,14 @@ export async function shareTrainingReport(sessionId: number): Promise<void> {
       mimeType: 'image/png',
       dialogTitle: '分享训练报告',
     });
-  } finally {
-    isSharing = false;
+  } catch (error) {
+    // 清理可能创建的临时文件
+    const fileUri = `${FileSystem.cacheDirectory}share_card_${sessionId}.png`;
+    try {
+      await FileSystem.deleteAsync(fileUri, { idempotent: true });
+    } catch {
+      // 忽略清理错误
+    }
+    throw error;
   }
 }
