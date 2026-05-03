@@ -198,9 +198,14 @@ export default function TrainingSessionScreen() {
     if (busy) return;
     setBusy(true);
     stopSpeaking();
-    try { await skipCurrentAction(); }
+    try {
+      await skipCurrentAction();
+      if (voiceEnabled) {
+        speakText('已跳过，进入下一个动作').catch(() => {});
+      }
+    }
     finally { setBusy(false); }
-  }, [busy, skipCurrentAction]);
+  }, [busy, skipCurrentAction, voiceEnabled]);
 
   const onMicPressIn = useCallback(async () => {
     if (!isOnline) {
