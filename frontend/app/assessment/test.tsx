@@ -245,11 +245,27 @@ export default function AssessmentTestScreen() {
       if (reply) {
         setAiMessage(reply);
         await speakText(reply);
+      } else {
+        setAiMessage('AI助手暂时无法回复，请稍后再试');
+        await speakText('AI助手暂时无法回复');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.log('AI 对话错误:', e);
-      setAiMessage('AI 对话失败，请稍后重试');
-      await speakText('AI 对话失败，请稍后重试');
+      let errorMsg = 'AI助手出错了，请稍后再试';
+
+      if (e?.message?.includes('超时') || e?.message?.includes('timeout')) {
+        errorMsg = 'AI响应超时，请重试';
+      } else if (e?.message?.includes('网络') || e?.message?.includes('Network')) {
+        errorMsg = '网络连接失败，请检查网络';
+      } else if (e?.response?.status === 401) {
+        errorMsg = '登录已过期，请重新登录';
+      } else if (e?.response?.status >= 500) {
+        errorMsg = '服务器繁忙，请稍后再试';
+      }
+
+      setAiMessage(errorMsg);
+      await speakText(errorMsg).catch(() => {});
+      Alert.alert('AI交互失败', errorMsg);
     }
   }, [current]);
 

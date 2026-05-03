@@ -232,18 +232,40 @@ export default function TrainingSessionScreen() {
     setIsRecording(false);
     try {
       const text = await stopRecordingAndRecognize();
-      if (!text || !current) return;
+      if (!text || !current) {
+        setAiMessage('没听清，请再说一次');
+        await speakText('没听清，请再说一次');
+        return;
+      }
       const res = await api.post<{ code: number; data: { reply: string } }>(AI_CHAT_URL, {
         messages: [{ role: 'user', content: text }],
         context: { action_name: current.name, current_set: currentSet, total_sets: current.planned_sets, phase: current.phase },
       });
       const reply = res.data?.data?.reply ?? '';
-      if (reply) { setAiMessage(reply); await speakText(reply); }
-    } catch (e: any) {
-      if (e?.message?.includes('超时')) {
-        Alert.alert('语音识别超时', '网络较慢，请重试');
+      if (reply) {
+        setAiMessage(reply);
+        await speakText(reply);
+      } else {
+        setAiMessage('AI助手暂时无法回复，请稍后再试');
+        await speakText('AI助手暂时无法回复，请稍后再试');
       }
-      // 其他错误静默处理
+    } catch (e: any) {
+      console.log('语音交互错误:', e);
+      let errorMsg = 'AI助手出错了，请稍后再试';
+
+      if (e?.message?.includes('超时')) {
+        errorMsg = '语音识别超时，请重试';
+      } else if (e?.message?.includes('网络')) {
+        errorMsg = '网络连接失败，请检查网络';
+      } else if (e?.response?.status === 401) {
+        errorMsg = '登录已过期，请重新登录';
+      } else if (e?.response?.status >= 500) {
+        errorMsg = '服务器繁忙，请稍后再试';
+      }
+
+      setAiMessage(errorMsg);
+      await speakText(errorMsg).catch(() => {});
+      Alert.alert('语音交互失败', errorMsg);
     }
   }, [isRecording, current, currentSet]);
 
