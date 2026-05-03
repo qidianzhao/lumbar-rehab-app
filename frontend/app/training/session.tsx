@@ -52,6 +52,7 @@ export default function TrainingSessionScreen() {
   const [videoError, setVideoError] = useState<string | null>(null);
 
   const pausedRef = useRef(false);
+  const prevPausedRef = useRef(false);
   const prevActionIndexRef = useRef(-1);
 
   const current = actions[currentActionIndex] ?? null;
@@ -149,6 +150,9 @@ export default function TrainingSessionScreen() {
 
   // 暂停/恢复控制
   useEffect(() => {
+    const wasJustResumed = prevPausedRef.current && !paused;
+    prevPausedRef.current = paused;
+
     if (paused) {
       player.pause();
       pauseBgMusic().catch(() => {});
@@ -158,8 +162,12 @@ export default function TrainingSessionScreen() {
         try { player.play(); } catch (e) { console.warn('播放失败:', e); }
       }
       resumeBgMusic().catch(() => {});
+      // 只在恢复时（从暂停变为非暂停）播报
+      if (wasJustResumed && voiceEnabled && phase !== 'finished') {
+        speakText('继续训练！').catch(() => {});
+      }
     }
-  }, [paused]);
+  }, [paused, phase, voiceEnabled]);
 
   // 训练完成后调用finishTraining保存数据
   useEffect(() => {
