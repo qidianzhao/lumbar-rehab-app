@@ -141,7 +141,7 @@ export default function TrainingSessionScreen() {
   const handleRestComplete = () => {
     setPhase('exercising');
     setCountdown(current.set_duration_seconds);
-    if (voiceEnabled) speakText('休息结束，开始下一组').catch(() => {});
+    if (voiceEnabled) speakText('休息结束，开始！').catch(() => {});
     if (current.video_url && !pausedRef.current) {
       try { player.play(); } catch (e) { console.warn('播放失败:', e); }
     }
@@ -272,8 +272,8 @@ export default function TrainingSessionScreen() {
       if (voiceEnabled && isOnline) {
         player.pause();
         const tip = current.tips
-          ? `第${currentActionIndex + 1}个动作：${current.name}，${current.tips}`
-          : `第${currentActionIndex + 1}个动作：${current.name}，注意保持正确姿势`;
+          ? `第${currentActionIndex + 1}个动作：${current.name}，${current.tips}。准备好了吗？开始！`
+          : `第${currentActionIndex + 1}个动作：${current.name}，注意保持正确姿势。开始！`;
         speakText(tip)
           .then(() => {
             if (videoUrl && !pausedRef.current) {
