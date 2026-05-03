@@ -53,11 +53,17 @@ function Stopwatch({ onCommit }: { onCommit: (seconds: number) => void }) {
   useEffect(() => {
     if (running) {
       intervalRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+      // 开始计时时启动背景音乐
+      startBgMusic('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3').catch(() => {});
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      // 停止计时时停止背景音乐
+      if (elapsed > 0) {
+        stopBgMusic().catch(() => {});
+      }
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running]);
+  }, [running, elapsed]);
 
   const toggle = () => {
     if (running) {
@@ -172,9 +178,8 @@ export default function AssessmentTestScreen() {
     return () => { cancelled = true; };
   }, []);
 
-  // 页面挂载时启动背景音乐，卸载时停止
+  // 页面卸载时停止背景音乐
   useEffect(() => {
-    startBgMusic('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3').catch(() => {});
     return () => { stopBgMusic().catch(() => {}); };
   }, []);
 
@@ -190,7 +195,7 @@ export default function AssessmentTestScreen() {
     speakText(`第${index + 1}个动作：${current.name}，${current.prompt}`)
       .then(() => { if (currentVideoUrl) player.play(); })
       .catch(() => { if (currentVideoUrl) player.play(); });
-  }, [index]);
+  }, [index, current]);
 
   const progress = items.length ? (index + 1) / items.length : 0;
   const currentValue = current ? values[current.action_id] : undefined;
