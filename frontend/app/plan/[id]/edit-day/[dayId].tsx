@@ -16,6 +16,7 @@ import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import type { PlanDay, PlanExercise, UpdatePlanDayExercise } from '@/src/services/planApi';
 import * as planApi from '@/src/services/planApi';
+import { handleError } from '@/src/utils/errorHandler';
 
 const PHASE_LABEL: Record<string, string> = {
   warmup: '热身',
@@ -61,7 +62,7 @@ export default function EditPlanDayScreen() {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : '加载失败');
+          setError(handleError(e, '加载失败'));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -129,8 +130,9 @@ export default function EditPlanDayScreen() {
         { text: '确定', onPress: () => router.back() },
       ]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '保存失败');
-      Alert.alert('保存失败', e instanceof Error ? e.message : '保存失败');
+      const errorMsg = handleError(e, '保存失败');
+      setError(errorMsg);
+      Alert.alert('保存失败', errorMsg);
     } finally {
       setSaving(false);
     }

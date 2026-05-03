@@ -15,6 +15,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { RadarChart } from '@/src/components/RadarChart';
 import type { AssessmentReport } from '@/src/services/assessmentApi';
 import * as assessmentApi from '@/src/services/assessmentApi';
+import { handleError } from '@/src/utils/errorHandler';
 
 const DIMENSION_ORDER: Array<{ key: string; label: string }> = [
   { key: 'core_endurance', label: '核心耐力' },
@@ -53,7 +54,7 @@ export default function AssessmentResultScreen() {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : '加载失败');
+          setError(handleError(e, '加载失败'));
         }
       } finally {
         if (!cancelled) setLoading(false);

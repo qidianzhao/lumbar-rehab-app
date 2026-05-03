@@ -21,6 +21,7 @@ import {
   type DateRange,
   type ExportSection,
 } from '@/src/services/exportService';
+import { handleError } from '@/src/utils/errorHandler';
 
 type Preset = 'week' | 'month' | 'custom';
 
@@ -102,7 +103,7 @@ export default function ExportScreen() {
     try {
       await exportAndShare(range, Array.from(sections));
     } catch (e) {
-      Alert.alert('导出失败', e instanceof Error ? e.message : '未知错误');
+      Alert.alert('导出失败', handleError(e, '未知错误'));
     } finally {
       setExporting(false);
     }

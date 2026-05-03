@@ -17,6 +17,7 @@ import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import type { PlanDay, PlanExercise, TrainingPlan } from '@/src/services/planApi';
 import * as planApi from '@/src/services/planApi';
+import { handleError } from '@/src/utils/errorHandler';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -78,7 +79,7 @@ export default function PlanDetailScreen() {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : '加载失败');
+          setError(handleError(e, '加载失败'));
         }
       } finally {
         if (!cancelled) {
@@ -109,7 +110,7 @@ export default function PlanDetailScreen() {
       const p = await planApi.confirmPlan(plan.id);
       setPlan(p);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '确认失败');
+      setError(handleError(e, '确认失败'));
     } finally {
       setConfirming(false);
     }

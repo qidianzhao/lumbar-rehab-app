@@ -18,6 +18,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import type { SessionFinishData } from '@/src/services/trainingApi';
 import { getSessionReport } from '@/src/services/trainingApi';
 import { useTrainingStore } from '@/src/stores/trainingStore';
+import { handleError } from '@/src/utils/errorHandler';
 
 export default function TrainingReportScreen() {
   const router = useRouter();
@@ -43,7 +44,8 @@ export default function TrainingReportScreen() {
         const data = await getSessionReport(sid);
         setReport(data);
       } catch (e) {
-        setError(e instanceof Error ? e.message : '加载失败');
+        const errorInfo = handleError(e, '加载训练报告');
+        setError(errorInfo.message);
       } finally {
         setLoading(false);
       }
@@ -95,7 +97,7 @@ export default function TrainingReportScreen() {
     try {
       await shareTrainingReport(sessionId);
     } catch (e) {
-      Alert.alert('分享失败', e instanceof Error ? e.message : '请稍后重试');
+      Alert.alert('分享失败', handleError(e, '请稍后重试'));
     } finally {
       setSharing(false);
     }

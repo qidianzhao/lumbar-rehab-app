@@ -24,6 +24,7 @@ import {
   startBgMusic,
   stopBgMusic,
 } from '@/src/services/voiceService';
+import { handleError } from '@/src/utils/errorHandler';
 
 const ASSESSMENT_PROGRESS_KEY = '@assessment_progress';
 
@@ -177,7 +178,10 @@ export default function AssessmentTestScreen() {
           console.log('恢复进度失败:', e);
         }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : '加载失败');
+        if (!cancelled) {
+          const errorInfo = handleError(e, '加载测试项目');
+          setError(errorInfo.message);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -262,7 +266,8 @@ export default function AssessmentTestScreen() {
       await AsyncStorage.removeItem(ASSESSMENT_PROGRESS_KEY);
       router.replace((`/assessment/result?id=${report.id}`) as unknown as Href);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '提交失败');
+      const errorInfo = handleError(e, '提交测试结果');
+      setError(errorInfo.message);
     } finally {
       setSubmitting(false);
     }

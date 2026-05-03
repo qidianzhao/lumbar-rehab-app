@@ -20,6 +20,7 @@ import {
   type LeaderboardEntry,
   type LeaderboardPeriod,
 } from '@/src/services/leaderboardService';
+import { handleError } from '@/src/utils/errorHandler';
 
 // ─── 子组件 ────────────────────────────────────────────────
 
@@ -121,7 +122,7 @@ export default function CheckinLeaderboardScreen() {
       const result = await getLeaderboard(p);
       setData(result);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载失败');
+      setError(handleError(e, '加载失败'));
     } finally {
       setLoading(false);
       setRefreshing(false);

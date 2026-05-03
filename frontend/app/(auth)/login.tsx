@@ -16,23 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { sendCode } from '@/src/api/auth';
 import { useAuthStore } from '@/src/stores/authStore';
-
-function formatApiError(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    const d = err.response?.data as { detail?: string | { msg?: string }[] } | undefined;
-    if (typeof d?.detail === 'string') {
-      return d.detail;
-    }
-    if (Array.isArray(d?.detail)) {
-      return d.detail.map((x) => JSON.stringify(x)).join('\n');
-    }
-    return err.message || '网络错误';
-  }
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return '请求失败';
-}
+import { handleError } from '@/src/utils/errorHandler';
 
 export default function LoginScreen() {
   const [loginMode, setLoginMode] = useState<'code' | 'password'>('code');
@@ -70,7 +54,8 @@ export default function LoginScreen() {
       await sendCode(p);
       setCountdown(60);
     } catch (e) {
-      Alert.alert('发送失败', formatApiError(e));
+      const errorInfo = handleError(e, '发送验证码');
+      Alert.alert('发送失败', errorInfo.message);
     } finally {
       setSending(false);
     }
@@ -101,7 +86,8 @@ export default function LoginScreen() {
       }
       router.replace('/(tabs)');
     } catch (e) {
-      Alert.alert('登录失败', formatApiError(e));
+      const errorInfo = handleError(e, '登录');
+      Alert.alert('登录失败', errorInfo.message);
     }
   }, [phone, code, password, login, loginWithPassword, loginMode]);
 

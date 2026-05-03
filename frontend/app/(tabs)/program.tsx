@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import * as planApi from '@/src/services/planApi';
+import { handleError } from '@/src/utils/errorHandler';
 
 const LEVEL_LABEL: Record<string, string> = {
   beginner: '入门',
@@ -56,7 +57,8 @@ export default function ProgramScreen() {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : '加载失败');
+          const errorInfo = handleError(e, '加载计划');
+          setError(errorInfo.message);
         }
       } finally {
         if (!cancelled) setLoading(false);

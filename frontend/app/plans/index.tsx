@@ -15,6 +15,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import * as planApi from '@/src/services/planApi';
 import * as trainingApi from '@/src/services/trainingApi';
 import { useTrainingStore } from '@/src/stores/trainingStore';
+import { handleError } from '@/src/utils/errorHandler';
 
 const WEEKDAY = ['一', '二', '三', '四', '五', '六', '日'];
 const LEVEL_LABEL: Record<string, string> = {
@@ -44,7 +45,10 @@ export default function PlansIndexScreen() {
         const p = await planApi.getCurrentPlan();
         if (!cancelled) setPlan(p);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : '加载失败');
+        if (!cancelled) {
+          const errorInfo = handleError(e, '加载计划');
+          setError(errorInfo.message);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -73,7 +77,8 @@ export default function PlansIndexScreen() {
       hydrateFromSession(session);
       router.push('/training/session' as Href);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '开始训练失败');
+      const errorInfo = handleError(e, '开始训练');
+      setError(errorInfo.message);
     } finally {
       setStartingDayId(null);
     }

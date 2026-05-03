@@ -13,6 +13,7 @@ import {
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import * as planApi from '@/src/services/planApi';
+import { handleError } from '@/src/utils/errorHandler';
 
 const FREQ_OPTIONS = [2, 3, 4, 5];
 const DURATION_OPTIONS = [15, 20, 25, 30];
@@ -49,7 +50,8 @@ export default function PlanGenerateScreen() {
       });
       setPlan(p);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '生成失败');
+      const errorInfo = handleError(e, '生成计划');
+      setError(errorInfo.message);
     } finally {
       setGenerating(false);
     }
@@ -63,7 +65,8 @@ export default function PlanGenerateScreen() {
       await planApi.confirmPlan(plan.id);
       router.replace('/(tabs)/program' as Href);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '确认失败');
+      const errorInfo = handleError(e, '确认计划');
+      setError(errorInfo.message);
     } finally {
       setConfirming(false);
     }

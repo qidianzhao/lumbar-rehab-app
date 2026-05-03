@@ -13,6 +13,7 @@ import {
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { getCheckinCalendar, type CheckinCalendarDay } from '@/src/api/checkin';
+import { handleError } from '@/src/utils/errorHandler';
 
 const WEEK_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -53,7 +54,7 @@ export default function CheckinCalendarScreen() {
       setStreak(data.streak_days);
       setTotal(data.total_days);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载失败');
+      setError(handleError(e, '加载失败'));
     } finally {
       setLoading(false);
     }

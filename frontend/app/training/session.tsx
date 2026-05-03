@@ -8,6 +8,7 @@ import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useTrainingStore } from '@/src/stores/trainingStore';
 import { useAIVoiceChat } from '@/src/hooks/useAIVoiceChat';
+import { handleError } from '@/src/utils/errorHandler';
 import {
   speakText,
   stopSpeaking,
@@ -280,7 +281,7 @@ export default function TrainingSessionScreen() {
         try {
           player.replace({ uri: videoUrl });
         } catch (e) {
-          console.warn('视频加载失败:', e);
+          console.warn('视频加载失败:', handleError(e));
           setVideoError('视频加载失败');
         }
       } else if (!isOnline && current.video_url) {

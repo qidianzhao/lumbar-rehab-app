@@ -6,6 +6,7 @@ import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import * as trainingApi from '@/src/services/trainingApi';
 import { useTrainingStore } from '@/src/stores/trainingStore';
+import { handleError } from '@/src/utils/errorHandler';
 
 const REGIONS: { id: string; label: string }[] = [
   { id: 'waist_left', label: '腰部左侧' },
@@ -57,7 +58,7 @@ export default function TrainingPreCheckScreen() {
       setModalVisible(false);
       router.replace('/training/session' as Href);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '创建会话失败');
+      setError(handleError(e, '创建会话失败'));
     } finally {
       setLoading(false);
     }

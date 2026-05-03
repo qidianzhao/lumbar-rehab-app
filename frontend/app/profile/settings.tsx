@@ -26,6 +26,7 @@ import {
   saveSettings,
   updateMe,
 } from '@/src/services/settingsService';
+import { handleError } from '@/src/utils/errorHandler';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -70,7 +71,7 @@ export default function SettingsScreen() {
       const updated = await updateMe({ show_in_leaderboard: value });
       setUserMe(updated);
     } catch (e) {
-      Alert.alert('保存失败', e instanceof Error ? e.message : '请稍后重试');
+      Alert.alert('保存失败', handleError(e, '请稍后重试'));
     } finally {
       setSaving(false);
     }

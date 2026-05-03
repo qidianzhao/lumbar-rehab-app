@@ -12,6 +12,7 @@ import {
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import * as planApi from '@/src/services/planApi';
+import { handleError } from '@/src/utils/errorHandler';
 
 const FREQ_OPTIONS = [2, 3, 4, 5];
 const DURATION_OPTIONS = [15, 20, 25, 30, 35, 40, 45];
@@ -35,8 +36,7 @@ export default function PlanGenerateScreen() {
       });
       router.replace(`/plan/${plan.id}` as Href);
     } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : '生成失败';
-      setError(errorMsg);
+      setError(handleError(e, '生成失败'));
     } finally {
       setSubmitting(false);
     }

@@ -15,6 +15,7 @@ import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import type { AssessmentTestItem } from '@/src/services/assessmentApi';
 import { getTestItems } from '@/src/services/assessmentApi';
+import { handleError } from '@/src/utils/errorHandler';
 
 const ASSESSMENT_PROGRESS_KEY = '@assessment_progress';
 
@@ -56,7 +57,10 @@ export default function AssessmentIntroScreen() {
           setHasSavedProgress(true);
         }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : '加载失败');
+        if (!cancelled) {
+          const errorInfo = handleError(e, '加载测试项目');
+          setError(errorInfo.message);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
