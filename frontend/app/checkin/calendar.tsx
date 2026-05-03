@@ -2,6 +2,7 @@ import { type Href, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -76,7 +77,7 @@ export default function CheckinCalendarScreen() {
   const todayStr = toDateStr(today.getFullYear(), today.getMonth() + 1, today.getDate());
 
   const checkinSet = new Set(days.filter(d => d.has_checkin).map(d => d.date));
-  const sessionMap = new Map(days.filter(d => d.training_session_id).map(d => [d.date, d.training_session_id!]));
+  const sessionMap = new Map(days.map(d => [d.date, d.training_session_ids]));
 
   // 构建日历格子：前置空格 + 每天
   const cells: Array<{ day: number | null; dateStr: string | null }> = [];
@@ -134,15 +135,28 @@ export default function CheckinCalendarScreen() {
             const dateStr = cell.dateStr;
             const isToday = dateStr === todayStr;
             const isCheckin = checkinSet.has(dateStr);
-            const sessionId = sessionMap.get(dateStr);
+            const sessionIds = sessionMap.get(dateStr) || [];
 
             return (
               <Pressable
                 key={dateStr}
                 style={styles.cell}
                 onPress={() => {
-                  if (sessionId) {
-                    router.push(`/training/report?session_id=${sessionId}` as unknown as Href);
+                  if (sessionIds.length === 0) return;
+
+                  if (sessionIds.length === 1) {
+                    // 单次训练，直接跳转
+                    router.push(`/training/report?session_id=${sessionIds[0]}` as unknown as Href);
+                  } else {
+                    // 多次训练，显示选择列表
+                    Alert.alert(
+                      '选择训练记录',
+                      `${dateStr} 共有 ${sessionIds.length} 次训练`,
+                      sessionIds.map((id, idx) => ({
+                        text: `训练 ${idx + 1}`,
+                        onPress: () => router.push(`/training/report?session_id=${id}` as unknown as Href),
+                      })).concat([{ text: '取消', style: 'cancel' }])
+                    );
                   }
                 }}
               >

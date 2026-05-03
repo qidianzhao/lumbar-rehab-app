@@ -10,7 +10,6 @@ from app.database import Base
 
 class Checkin(Base):
     __tablename__ = "checkins"
-    __table_args__ = (UniqueConstraint("user_id", "checkin_date", name="uq_checkins_user_date"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(

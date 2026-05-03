@@ -43,35 +43,41 @@ async def get_checkin_calendar(
         )
     ).scalars().all()
 
-    checkin_map: dict[date, Checkin] = {r.checkin_date: r for r in rows}
+    # 按日期分组，支持每天多条记录
+    checkin_map: dict[date, list[Checkin]] = {}
+    for r in rows:
+        checkin_map.setdefault(r.checkin_date, []).append(r)
 
     # 构建当月每天
     _, days_in_month = calendar.monthrange(year, month)
     days: list[CheckinCalendarDay] = []
     for d in range(1, days_in_month + 1):
         day_date = date(year, month, d)
-        record = checkin_map.get(day_date)
+        records = checkin_map.get(day_date, [])
+        session_ids = [r.training_session_id for r in records if r.training_session_id]
         days.append(
             CheckinCalendarDay(
                 date=day_date,
-                has_checkin=record is not None,
-                training_session_id=record.training_session_id if record else None,
+                has_checkin=len(records) > 0,
+                training_session_ids=session_ids,
             )
         )
 
-    # 累计打卡天数（全历史）
+    # 累计打卡天数（统计不重复的日期数）
     total_days = int(
         (
             await db.scalar(
-                select(func.count()).select_from(Checkin).where(Checkin.user_id == user_id)
+                select(func.count(func.distinct(Checkin.checkin_date)))
+                .select_from(Checkin)
+                .where(Checkin.user_id == user_id)
             )
         )
         or 0
     )
 
-    # 连续打卡天数（从今天往前数）
+    # 连续打卡天数（从今天往前数，使用不重复的日期）
     all_dates_q = await db.execute(
-        select(Checkin.checkin_date)
+        select(func.distinct(Checkin.checkin_date))
         .where(Checkin.user_id == user_id)
         .order_by(Checkin.checkin_date.desc())
     )
@@ -151,12 +157,12 @@ async def get_leaderboard(
     else:  # YEAR
         start_date = today.replace(month=1, day=1)
 
-    # 统计周期内每个用户的打卡天数
+    # 统计周期内每个用户的打卡天数（不重复日期）
     count_q = (
-        select(Checkin.user_id, func.count(Checkin.id).label("cnt"))
+        select(Checkin.user_id, func.count(func.distinct(Checkin.checkin_date)).label("cnt"))
         .where(Checkin.checkin_date >= start_date)
         .group_by(Checkin.user_id)
-        .order_by(func.count(Checkin.id).desc())
+        .order_by(func.count(func.distinct(Checkin.checkin_date)).desc())
         .limit(50)
     )
     rows = (await db.execute(count_q)).all()          # [(user_id, cnt), ...]
@@ -173,10 +179,10 @@ async def get_leaderboard(
         ).scalars().all()
     }
 
-    # 批量查询这些用户的全部打卡日期（用于计算 streak）
+    # 批量查询这些用户的全部打卡日期（用于计算 streak，使用不重复日期）
     all_dates_q = (
         await db.execute(
-            select(Checkin.user_id, Checkin.checkin_date)
+            select(Checkin.user_id, func.distinct(Checkin.checkin_date))
             .where(Checkin.user_id.in_(involved_ids))
             .order_by(Checkin.checkin_date.desc())
         )
@@ -212,7 +218,7 @@ async def get_leaderboard(
     # 当前用户不在榜单内，单独计算
     if my_entry is None:
         my_cnt_row = await db.scalar(
-            select(func.count(Checkin.id)).where(
+            select(func.count(func.distinct(Checkin.checkin_date))).where(
                 Checkin.user_id == user_id,
                 Checkin.checkin_date >= start_date,
             )

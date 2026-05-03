@@ -121,27 +121,14 @@ async def sync_upload(
             # 查找对应的服务器 session_id
             server_session_id = session_id_map.get(offline_checkin.local_session_id)
 
-            # 检查是否已存在
+            # 验证日期格式
             from datetime import date
             try:
                 checkin_date = date.fromisoformat(offline_checkin.checkin_date)
             except ValueError:
                 raise ValueError(f"日期格式错误: {offline_checkin.checkin_date}")
 
-            existing = await db.scalar(
-                select(Checkin).where(
-                    Checkin.user_id == user_id,
-                    Checkin.checkin_date == checkin_date,
-                )
-            )
-
-            if existing:
-                synced_checkins.append(SyncedItem(
-                    local_id=offline_checkin.local_id,
-                    server_id=existing.id,
-                ))
-                continue
-
+            # 直接创建打卡记录（支持每天多次打卡）
             checkin = Checkin(
                 user_id=user_id,
                 checkin_date=checkin_date,

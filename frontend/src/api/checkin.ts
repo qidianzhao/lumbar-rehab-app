@@ -9,7 +9,7 @@ interface ApiEnvelope<T> {
 export interface CheckinCalendarDay {
   date: string; // 'YYYY-MM-DD'
   has_checkin: boolean;
-  training_session_id: number | null;
+  training_session_ids: number[]; // 支持每天多次训练
 }
 
 export interface CheckinCalendarData {

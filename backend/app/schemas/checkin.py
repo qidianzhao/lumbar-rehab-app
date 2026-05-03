@@ -7,7 +7,7 @@ from pydantic import BaseModel
 class CheckinCalendarDay(BaseModel):
     date: date
     has_checkin: bool
-    training_session_id: int | None = None
+    training_session_ids: list[int] = []  # 支持每天多次训练
 
 
 class CheckinCalendarResponse(BaseModel):
