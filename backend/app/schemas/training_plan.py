@@ -55,3 +55,17 @@ class TrainingPlanResponse(BaseModel):
     )
 
     model_config = {"from_attributes": True}
+
+
+class UpdatePlanDayExerciseRequest(BaseModel):
+    id: int | None = Field(default=None, description="动作ID（新增时为None）")
+    action_id: int = Field(description="关联的动作库ID")
+    phase: str = Field(description="阶段：warmup/core/stretch")
+    sets: int = Field(ge=1, le=10, description="组数")
+    reps: int = Field(ge=1, le=100, description="次数")
+    rest_seconds: int = Field(ge=0, le=300, description="休息时间（秒）")
+    sort_order: int = Field(ge=0, description="排序")
+
+
+class UpdatePlanDayRequest(BaseModel):
+    exercises: list[UpdatePlanDayExerciseRequest] = Field(description="动作列表")

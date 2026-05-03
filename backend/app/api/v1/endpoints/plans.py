@@ -8,9 +8,9 @@ from app.api.v1.endpoints.actions import _build_video_url
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.action import Action
-from app.models.training_plan import PlanStatus, TrainingPlan
+from app.models.training_plan import PlanStatus, TrainingPlan, PlanDay, PlanExercise
 from app.schemas.common import APIResponse
-from app.schemas.training_plan import PlanDayResponse, PlanExerciseResponse, PlanGenerateRequest, TrainingPlanResponse
+from app.schemas.training_plan import PlanDayResponse, PlanExerciseResponse, PlanGenerateRequest, TrainingPlanResponse, UpdatePlanDayRequest
 from app.services import plan_generator
 from app.services.action_seed import ensure_actions_seeded
 from app.services.ai_usage_service import record_usage
@@ -189,3 +189,109 @@ async def confirm_plan(
     if refreshed is None:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认后加载失败")
     return APIResponse(code=0, message="ok", data=await _plan_to_response(refreshed, db))
+
+
+@router.put("/{plan_id}/days/{day_id}", response_model=APIResponse[PlanDayResponse])
+async def update_plan_day(
+    plan_id: int,
+    day_id: int,
+    body: UpdatePlanDayRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> APIResponse[PlanDayResponse]:
+    user_id = int(current_user["id"])
+
+    # 验证计划所有权
+    loaded = await plan_generator.load_plan_with_days(db, plan_id)
+    if loaded is None or loaded.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="计划不存在")
+
+    # 查找目标训练日
+    day_result = await db.execute(
+        select(PlanDay).where(PlanDay.id == day_id, PlanDay.plan_id == plan_id)
+    )
+    day = day_result.scalar_one_or_none()
+    if day is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="训练日不存在")
+
+    # 验证至少有一个动作
+    if not body.exercises:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="至少需要一个动作")
+
+    # 验证所有action_id存在
+    action_ids = {ex.action_id for ex in body.exercises}
+    action_result = await db.execute(select(Action).where(Action.id.in_(action_ids)))
+    actions = action_result.scalars().all()
+    action_map = {act.id: act for act in actions}
+
+    if len(action_map) != len(action_ids):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="部分动作不存在")
+
+    # 删除旧的动作
+    await db.execute(
+        select(PlanExercise).where(PlanExercise.plan_day_id == day_id)
+    )
+    for ex in day.exercises:
+        await db.delete(ex)
+
+    # 创建新的动作
+    new_exercises = []
+    for ex_req in body.exercises:
+        action = action_map[ex_req.action_id]
+        new_ex = PlanExercise(
+            plan_day_id=day_id,
+            action_id=ex_req.action_id,
+            name=action.name,
+            phase=ex_req.phase,
+            sets=ex_req.sets,
+            reps=ex_req.reps,
+            rest_seconds=ex_req.rest_seconds,
+            sort_order=ex_req.sort_order,
+        )
+        db.add(new_ex)
+        new_exercises.append(new_ex)
+
+    # 更新训练日的预估时长
+    total_duration = sum(
+        ex.sets * (ex.reps * 2 + ex.rest_seconds) for ex in new_exercises
+    ) // 60
+    day.estimated_duration = max(1, total_duration)
+
+    await db.commit()
+
+    # 重新加载以获取完整数据
+    await db.refresh(day)
+    day_result = await db.execute(
+        select(PlanDay).where(PlanDay.id == day_id)
+    )
+    refreshed_day = day_result.scalar_one()
+
+    # 构建响应
+    exercises_response = []
+    for ex in sorted(refreshed_day.exercises, key=lambda e: e.sort_order):
+        action = action_map.get(ex.action_id)
+        exercises_response.append(
+            PlanExerciseResponse(
+                id=ex.id,
+                action_id=ex.action_id,
+                name=ex.name,
+                phase=ex.phase,
+                sets=ex.sets,
+                reps=ex.reps,
+                rest_seconds=ex.rest_seconds,
+                sort_order=ex.sort_order,
+                video_url=_build_video_url(action.video_url) if action and action.video_url else None,
+            )
+        )
+
+    response = PlanDayResponse(
+        id=refreshed_day.id,
+        week_number=refreshed_day.week_number,
+        day_number=refreshed_day.day_number,
+        day_type=refreshed_day.day_type,
+        title=refreshed_day.title,
+        estimated_duration=refreshed_day.estimated_duration,
+        exercises=exercises_response,
+    )
+
+    return APIResponse(code=0, message="ok", data=response)

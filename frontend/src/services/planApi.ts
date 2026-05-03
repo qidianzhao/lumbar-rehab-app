@@ -79,3 +79,22 @@ export async function confirmPlan(planId: number): Promise<TrainingPlan> {
   const res = await api.post<ApiEnvelope<TrainingPlan>>(`/plans/${planId}/confirm`);
   return unwrap(res.data);
 }
+
+export interface UpdatePlanDayExercise {
+  id?: number;
+  action_id: number;
+  phase: string;
+  sets: number;
+  reps: number;
+  rest_seconds: number;
+  sort_order: number;
+}
+
+export interface UpdatePlanDayBody {
+  exercises: UpdatePlanDayExercise[];
+}
+
+export async function updatePlanDay(planId: number, dayId: number, body: UpdatePlanDayBody): Promise<PlanDay> {
+  const res = await api.put<ApiEnvelope<PlanDay>>(`/plans/${planId}/days/${dayId}`, body);
+  return unwrap(res.data);
+}

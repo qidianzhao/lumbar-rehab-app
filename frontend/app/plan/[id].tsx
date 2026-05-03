@@ -174,6 +174,12 @@ export default function PlanDetailScreen() {
                       约 {day.estimated_duration} 分钟
                     </Text>
                   </View>
+                  <Pressable
+                    style={[styles.editBtn, { borderColor: theme.tint }]}
+                    onPress={() => router.push(`/plan/${plan.id}/edit-day/${day.id}` as Href)}
+                  >
+                    <FontAwesome name="edit" size={14} color={theme.tint} />
+                  </Pressable>
                   <FontAwesome
                     name={expanded[day.id] ? 'chevron-up' : 'chevron-down'}
                     size={16}
@@ -280,6 +286,15 @@ const styles = StyleSheet.create({
   exerciseRow: { marginBottom: 8 },
   exName: { fontSize: 15, fontWeight: '600' },
   exDetail: { fontSize: 13, opacity: 0.85, marginTop: 2 },
+  editBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
   footer: {
     position: 'absolute',
     left: 0,
