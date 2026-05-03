@@ -161,19 +161,30 @@ export default function TrainingSessionScreen() {
     }
   }, [paused]);
 
-  // 训练完成后自动跳转
+  // 训练完成后调用finishTraining保存数据
   useEffect(() => {
     if (phase !== 'finished') return;
-    const id = setTimeout(async () => {
+    let cancelled = false;
+    const finish = async () => {
       setBusy(true);
       try {
         await finishTraining();
         reset(); // 清除持久化的训练状态
-        router.replace('/training/report' as Href);
-      } finally { setBusy(false); }
-    }, 3000);
-    return () => clearTimeout(id);
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    };
+    finish();
+    return () => { cancelled = true; };
   }, [phase]);
+
+  const onViewReport = useCallback(() => {
+    router.replace('/training/report' as Href);
+  }, []);
+
+  const onBackHome = useCallback(() => {
+    router.replace('/(tabs)' as Href);
+  }, []);
 
   const onSkip = useCallback(async () => {
     if (busy) return;
@@ -296,9 +307,26 @@ export default function TrainingSessionScreen() {
   if (phase === 'finished') {
     return (
       <View style={[styles.center, { backgroundColor: theme.background }]}>
-        <Text style={[styles.doneTitle, { color: theme.text }]}>训练完成！</Text>
-        <Text style={[styles.doneSub, { color: theme.text }]}>正在生成报告…</Text>
-        {busy ? <ActivityIndicator color={theme.tint} style={{ marginTop: 16 }} /> : null}
+        <Text style={[styles.doneTitle, { color: theme.text }]}>🎉 训练完成！</Text>
+        <Text style={[styles.doneSub, { color: theme.textSecondary }]}>
+          {busy ? '正在保存数据...' : '恭喜你完成了今天的训练'}
+        </Text>
+        {busy ? (
+          <ActivityIndicator color={theme.tint} style={{ marginTop: 16 }} />
+        ) : (
+          <View style={styles.finishedActions}>
+            <Pressable
+              style={[styles.finishedBtn, styles.finishedBtnPrimary, { backgroundColor: theme.tint }]}
+              onPress={onViewReport}>
+              <Text style={styles.finishedBtnText}>查看训练报告</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.finishedBtn, styles.finishedBtnSecondary, { borderColor: theme.border }]}
+              onPress={onBackHome}>
+              <Text style={[styles.finishedBtnTextSecondary, { color: theme.text }]}>返回首页</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
     );
   }
@@ -416,5 +444,11 @@ const styles = StyleSheet.create({
   btnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
   doneTitle: { fontSize: 24, fontWeight: '900' },
   doneSub: { fontSize: 15, opacity: 0.8, marginTop: 8 },
+  finishedActions: { marginTop: 32, width: '100%', gap: 12, paddingHorizontal: 24 },
+  finishedBtn: { paddingVertical: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  finishedBtnPrimary: {},
+  finishedBtnSecondary: { backgroundColor: 'transparent', borderWidth: 1 },
+  finishedBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  finishedBtnTextSecondary: { fontSize: 16, fontWeight: '600' },
   recordingHint: { textAlign: 'center', color: '#e53935', fontSize: 13, marginTop: 8 },
 });
