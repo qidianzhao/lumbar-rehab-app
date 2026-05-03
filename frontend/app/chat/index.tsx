@@ -158,9 +158,9 @@ export default function ChatScreen() {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
-    } catch (error: any) {
+    } catch (error) {
       logger.error('发送消息失败:', error);
-      Alert.alert('错误', error.message || '发送失败，请重试');
+      Alert.alert('错误', error instanceof Error ? error.message : '发送失败，请重试');
 
       setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
     } finally {

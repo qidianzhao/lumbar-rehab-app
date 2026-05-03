@@ -181,30 +181,33 @@ export default function OfflineManagementScreen() {
       }
 
       await loadStatus();
-    } catch (error: any) {
+    } catch (error) {
       let errorMessage = '同步失败';
       let errorDetail = '';
 
-      if (error.response) {
+      if (error && typeof error === 'object' && 'response' in error) {
         // HTTP错误
-        const status = error.response.status;
+        const response = (error as { response?: { status?: number } }).response;
+        const status = response?.status;
         if (status === 401) {
           errorDetail = '登录已过期，请重新登录';
         } else if (status === 403) {
           errorDetail = '没有权限执行此操作';
         } else if (status === 500) {
           errorDetail = '服务器内部错误，请稍后重试';
-        } else if (status >= 400 && status < 500) {
+        } else if (status && status >= 400 && status < 500) {
           errorDetail = '请求数据格式错误';
-        } else {
+        } else if (status) {
           errorDetail = `服务器错误 (${status})`;
         }
-      } else if (error.message?.includes('Network')) {
-        errorDetail = '网络连接失败，请检查网络设置';
-      } else if (error.message?.includes('timeout')) {
-        errorDetail = '请求超时，请检查网络连接';
-      } else if (error.message) {
-        errorDetail = error.message;
+      } else if (error instanceof Error) {
+        if (error.message.includes('Network')) {
+          errorDetail = '网络连接失败，请检查网络设置';
+        } else if (error.message.includes('timeout')) {
+          errorDetail = '请求超时，请检查网络连接';
+        } else {
+          errorDetail = error.message;
+        }
       } else {
         errorDetail = '未知错误，请重试';
       }

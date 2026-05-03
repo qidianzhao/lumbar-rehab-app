@@ -45,7 +45,7 @@ export interface OfflineTrainingSession {
   started_at: string;
   ended_at?: string;
   records: OfflineTrainingRecord[];
-  pain_info?: any;
+  pain_info?: Record<string, unknown>;
 }
 
 export interface OfflineCheckin {
@@ -229,7 +229,7 @@ export async function downloadVideo(
       // 下载成功，清除进度记录
       await clearDownloadProgress(actionId);
       return result.uri;
-    } catch (error: any) {
+    } catch (error) {
       retryCount++;
       console.error(`下载失败 (尝试 ${retryCount}/${maxRetries}):`, error);
 
@@ -303,11 +303,11 @@ export async function downloadVideos(
       await downloadVideo(video.action_id, video.video_url);
       completed++;
       onProgress?.(completed, total, failed.length);
-    } catch (error: any) {
+    } catch (error) {
       console.error(`下载视频失败 (action_id=${video.action_id}):`, error);
       failed.push({
         action_id: video.action_id,
-        error: error.message || '下载失败',
+        error: error instanceof Error ? error.message : '下载失败',
       });
       onProgress?.(completed, total, failed.length);
     }

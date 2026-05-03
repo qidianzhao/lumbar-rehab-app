@@ -46,10 +46,14 @@ export async function freeChat(messages: ChatMessage[]): Promise<string> {
     });
     console.log('[chatApi] freeChat response:', JSON.stringify(res.data));
     return unwrap(res.data).reply;
-  } catch (error: any) {
+  } catch (error) {
     console.error('[chatApi] freeChat error:', error);
-    console.error('[chatApi] error.response:', error.response);
-    console.error('[chatApi] error.message:', error.message);
+    if (error && typeof error === 'object' && 'response' in error) {
+      console.error('[chatApi] error.response:', (error as { response?: unknown }).response);
+    }
+    if (error instanceof Error) {
+      console.error('[chatApi] error.message:', error.message);
+    }
     throw error;
   }
 }
@@ -59,7 +63,7 @@ export async function freeChat(messages: ChatMessage[]): Promise<string> {
  */
 export async function trainingChat(
   messages: ChatMessage[],
-  context?: Record<string, any>
+  context?: Record<string, unknown>
 ): Promise<string> {
   const res = await api.post<ApiEnvelope<ChatResponse>>('/ai/chat', {
     messages,
@@ -76,10 +80,14 @@ export async function getUsageLimit(): Promise<UsageLimitInfo> {
     const res = await api.get<ApiEnvelope<UsageLimitInfo>>('/ai/usage-limit');
     console.log('[chatApi] getUsageLimit response:', JSON.stringify(res.data));
     return unwrap(res.data);
-  } catch (error: any) {
+  } catch (error) {
     console.error('[chatApi] getUsageLimit error:', error);
-    console.error('[chatApi] error.response:', error.response);
-    console.error('[chatApi] error.message:', error.message);
+    if (error && typeof error === 'object' && 'response' in error) {
+      console.error('[chatApi] error.response:', (error as { response?: unknown }).response);
+    }
+    if (error instanceof Error) {
+      console.error('[chatApi] error.message:', error.message);
+    }
     throw error;
   }
 }

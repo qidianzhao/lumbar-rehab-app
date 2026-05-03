@@ -37,8 +37,8 @@ export default function UsageStatsScreen() {
       setError(null);
       const data = await getUserUsageStats(7);
       setStats(data);
-    } catch (err: any) {
-      setError(err.message || '加载失败');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载失败');
     } finally {
       setLoading(false);
     }

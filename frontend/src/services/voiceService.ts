@@ -110,9 +110,13 @@ export async function stopRecordingAndRecognize(): Promise<string> {
       const text = res.data?.data?.text ?? '';
       console.log('ASR 识别文字:', text);
       return text;
-    } catch (e: any) {
+    } catch (e) {
       clearTimeout(timeoutId);
-      if (e.name === 'AbortError' || e.message?.includes('timeout')) {
+      if (e && typeof e === 'object' && 'name' in e && e.name === 'AbortError') {
+        console.log('ASR 超时');
+        throw new Error('语音识别超时，请重试');
+      }
+      if (e instanceof Error && e.message.includes('timeout')) {
         console.log('ASR 超时');
         throw new Error('语音识别超时，请重试');
       }

@@ -68,18 +68,23 @@ export function useAIVoiceChat(options: AIVoiceChatOptions): AIVoiceChatResult {
         setAiMessage('AI助手暂时无法回复，请稍后再试');
         await speakText('AI助手暂时无法回复');
       }
-    } catch (e: any) {
+    } catch (e) {
       console.log('AI 对话错误:', e);
       let errorMsg = 'AI助手出错了，请稍后再试';
 
-      if (e?.message?.includes('超时') || e?.message?.includes('timeout')) {
-        errorMsg = 'AI响应超时，请重试';
-      } else if (e?.message?.includes('网络') || e?.message?.includes('Network')) {
-        errorMsg = '网络连接失败，请检查网络';
-      } else if (e?.response?.status === 401) {
-        errorMsg = '登录已过期，请重新登录';
-      } else if (e?.response?.status >= 500) {
-        errorMsg = '服务器繁忙，请稍后再试';
+      if (e instanceof Error) {
+        if (e.message.includes('超时') || e.message.includes('timeout')) {
+          errorMsg = 'AI响应超时，请重试';
+        } else if (e.message.includes('网络') || e.message.includes('Network')) {
+          errorMsg = '网络连接失败，请检查网络';
+        }
+      } else if (e && typeof e === 'object' && 'response' in e) {
+        const response = (e as { response?: { status?: number } }).response;
+        if (response?.status === 401) {
+          errorMsg = '登录已过期，请重新登录';
+        } else if (response?.status && response.status >= 500) {
+          errorMsg = '服务器繁忙，请稍后再试';
+        }
       }
 
       setAiMessage(errorMsg);
@@ -103,13 +108,13 @@ export function useAIVoiceChat(options: AIVoiceChatOptions): AIVoiceChatResult {
 
     try {
       await startRecording();
-    } catch (e: any) {
+    } catch (e) {
       console.log('录音启动失败:', e);
       setIsRecording(false);
       const errorMsg = '录音启动失败，请检查麦克风权限';
       setAiMessage(errorMsg);
       await speakText(errorMsg);
-      Alert.alert('录音失败', e?.message ?? errorMsg);
+      Alert.alert('录音失败', e instanceof Error ? e.message : errorMsg);
     }
   }, [isOnline, onRecordingStart]);
 
@@ -129,11 +134,11 @@ export function useAIVoiceChat(options: AIVoiceChatOptions): AIVoiceChatResult {
       }
 
       await sendTextToAI(text);
-    } catch (e: any) {
+    } catch (e) {
       console.log('识别错误:', e);
       let errorMsg = '语音识别失败，请重试';
 
-      if (e?.message?.includes('超时')) {
+      if (e instanceof Error && e.message.includes('超时')) {
         errorMsg = '语音识别超时，请重试';
       }
 

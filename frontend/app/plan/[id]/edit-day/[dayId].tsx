@@ -72,7 +72,7 @@ export default function EditPlanDayScreen() {
     return () => { cancelled = true; };
   }, [planId, planDayId]);
 
-  const updateExercise = (index: number, field: keyof EditableExercise, value: any) => {
+  const updateExercise = (index: number, field: keyof EditableExercise, value: string | number) => {
     setExercises((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: value };
