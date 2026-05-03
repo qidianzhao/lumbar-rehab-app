@@ -16,6 +16,7 @@ import {
   stopBgMusic,
   pauseBgMusic,
   resumeBgMusic,
+  waitForSpeechEnd,
 } from '@/src/services/voiceService';
 import { api } from '@/src/api/client';
 import * as offlineService from '@/src/services/offlineService';
@@ -104,7 +105,7 @@ export default function TrainingSessionScreen() {
       if (phase === 'exercising') {
         await handleExerciseComplete();
       } else if (phase === 'resting') {
-        handleRestComplete();
+        await handleRestComplete();
       }
     };
 
@@ -122,6 +123,8 @@ export default function TrainingSessionScreen() {
       if (s.isWorkoutFlowDone()) {
         setPhase('finished');
         if (voiceEnabled) {
+          // 等待AI语音播放完成，避免重叠
+          await waitForSpeechEnd(3000);
           const totalActions = actions.length;
           const summary = `训练完成，干得漂亮！你完成了${totalActions}个动作的训练，继续保持，你会越来越强！`;
           speakText(summary).catch(() => {});
@@ -134,6 +137,8 @@ export default function TrainingSessionScreen() {
         setPhase('resting');
         setCountdown(current.rest_seconds);
         if (voiceEnabled) {
+          // 等待AI语音播放完成，避免重叠
+          await waitForSpeechEnd(3000);
           const encouragements = ['很好！', '做得不错！', '继续保持！', '太棒了！', '加油！'];
           const randomEncouragement = encouragements[Math.floor(Math.random() * encouragements.length)];
           speakText(`${randomEncouragement}这组完成，休息${current.rest_seconds}秒`).catch(() => {});
@@ -147,10 +152,14 @@ export default function TrainingSessionScreen() {
   };
 
   // 处理休息完成
-  const handleRestComplete = () => {
+  const handleRestComplete = async () => {
     setPhase('exercising');
     setCountdown(current.set_duration_seconds);
-    if (voiceEnabled) speakText('休息结束，开始！').catch(() => {});
+    if (voiceEnabled) {
+      // 等待AI语音播放完成，避免重叠
+      await waitForSpeechEnd(3000);
+      speakText('休息结束，开始！').catch(() => {});
+    }
     if (current.video_url && !pausedRef.current) {
       try { player.play(); } catch (e) { console.warn('播放失败:', e); }
     }
@@ -209,6 +218,8 @@ export default function TrainingSessionScreen() {
     try {
       await skipCurrentAction();
       if (voiceEnabled) {
+        // 等待AI语音播放完成，避免重叠
+        await waitForSpeechEnd(3000);
         speakText('已跳过，进入下一个动作').catch(() => {});
       }
     }
@@ -319,6 +330,8 @@ export default function TrainingSessionScreen() {
 
       if (voiceEnabled && isOnline) {
         player.pause();
+        // 等待AI语音播放完成，避免重叠
+        await waitForSpeechEnd(3000);
         const tip = current.tips
           ? `第${currentActionIndex + 1}个动作：${current.name}，${current.tips}。准备好了吗？开始！`
           : `第${currentActionIndex + 1}个动作：${current.name}，注意保持正确姿势。开始！`;

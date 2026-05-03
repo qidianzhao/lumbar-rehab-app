@@ -128,6 +128,18 @@ export async function stopRecordingAndRecognize(): Promise<string> {
   }
 }
 
+export function isSpeaking(): boolean {
+  return _speaking;
+}
+
+export async function waitForSpeechEnd(maxWaitMs: number = 5000): Promise<void> {
+  if (!_speaking) return;
+  const startTime = Date.now();
+  while (_speaking && (Date.now() - startTime) < maxWaitMs) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+}
+
 export async function speakText(text: string): Promise<void> {
   if (!text.trim()) return;
   stopSpeaking();
