@@ -11,8 +11,17 @@ import { api } from '@/src/api/client';
 const VIDEO_CACHE_DIR = `${FileSystem.documentDirectory}videos/`;
 const OFFLINE_DATA_KEY = '@offline_data';
 const LAST_SYNC_KEY = '@last_sync_at';
+const DOWNLOAD_PROGRESS_KEY = '@download_progress';
 
 // ─── 类型定义 ────────────────────────────────────────────
+
+export interface DownloadProgress {
+  actionId: number;
+  videoUrl: string;
+  resumeData: string;
+  progress: number;
+  timestamp: number;
+}
 
 export interface OfflineTrainingRecord {
   action_id: number;
@@ -73,6 +82,59 @@ export async function isOnline(): Promise<boolean> {
 // ─── 视频下载管理 ────────────────────────────────────────
 
 /**
+ * 保存下载进度
+ */
+async function saveDownloadProgress(actionId: number, videoUrl: string, resumeData: string, progress: number): Promise<void> {
+  try {
+    const allProgress = await getDownloadProgressMap();
+    allProgress[actionId] = {
+      actionId,
+      videoUrl,
+      resumeData,
+      progress,
+      timestamp: Date.now(),
+    };
+    await AsyncStorage.setItem(DOWNLOAD_PROGRESS_KEY, JSON.stringify(allProgress));
+  } catch (error) {
+    console.error('保存下载进度失败:', error);
+  }
+}
+
+/**
+ * 获取所有下载进度
+ */
+async function getDownloadProgressMap(): Promise<Record<number, DownloadProgress>> {
+  try {
+    const json = await AsyncStorage.getItem(DOWNLOAD_PROGRESS_KEY);
+    if (!json) return {};
+    return JSON.parse(json);
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * 获取单个视频的下载进度
+ */
+async function getDownloadProgress(actionId: number): Promise<DownloadProgress | null> {
+  const allProgress = await getDownloadProgressMap();
+  return allProgress[actionId] || null;
+}
+
+/**
+ * 清除下载进度
+ */
+async function clearDownloadProgress(actionId: number): Promise<void> {
+  try {
+    const allProgress = await getDownloadProgressMap();
+    delete allProgress[actionId];
+    await AsyncStorage.setItem(DOWNLOAD_PROGRESS_KEY, JSON.stringify(allProgress));
+  } catch (error) {
+    console.error('清除下载进度失败:', error);
+  }
+}
+
+/**
  * 确保视频缓存目录存在
  */
 async function ensureVideoCacheDir(): Promise<void> {
@@ -99,37 +161,130 @@ export async function isVideoDownloaded(actionId: number): Promise<boolean> {
 }
 
 /**
- * 下载单个视频
+ * 下载单个视频（支持断点续传）
  */
 export async function downloadVideo(
   actionId: number,
   videoUrl: string,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  maxRetries: number = 3
 ): Promise<string> {
   await ensureVideoCacheDir();
   const localPath = getVideoLocalPath(actionId);
 
   // 如果已存在，直接返回
   if (await isVideoDownloaded(actionId)) {
+    await clearDownloadProgress(actionId);
     return localPath;
   }
 
-  const downloadResumable = FileSystem.createDownloadResumable(
-    videoUrl,
-    localPath,
-    {},
-    (downloadProgress) => {
-      const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
-      onProgress?.(progress);
-    }
-  );
+  let downloadResumable: FileSystem.DownloadResumable;
+  let retryCount = 0;
 
-  const result = await downloadResumable.downloadAsync();
-  if (!result) {
-    throw new Error('下载失败');
+  // 尝试恢复之前的下载
+  const savedProgress = await getDownloadProgress(actionId);
+  if (savedProgress && savedProgress.videoUrl === videoUrl && savedProgress.resumeData) {
+    try {
+      downloadResumable = new FileSystem.DownloadResumable(
+        videoUrl,
+        localPath,
+        {},
+        (downloadProgress) => {
+          const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
+          onProgress?.(progress);
+        },
+        savedProgress.resumeData
+      );
+    } catch (error) {
+      console.warn('恢复下载失败，将重新开始:', error);
+      downloadResumable = FileSystem.createDownloadResumable(
+        videoUrl,
+        localPath,
+        {},
+        (downloadProgress) => {
+          const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
+          onProgress?.(progress);
+        }
+      );
+    }
+  } else {
+    downloadResumable = FileSystem.createDownloadResumable(
+      videoUrl,
+      localPath,
+      {},
+      (downloadProgress) => {
+        const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
+        onProgress?.(progress);
+      }
+    );
   }
 
-  return result.uri;
+  while (retryCount < maxRetries) {
+    try {
+      const result = await downloadResumable.downloadAsync();
+      if (!result) {
+        throw new Error('下载失败');
+      }
+
+      // 下载成功，清除进度记录
+      await clearDownloadProgress(actionId);
+      return result.uri;
+    } catch (error: any) {
+      retryCount++;
+      console.error(`下载失败 (尝试 ${retryCount}/${maxRetries}):`, error);
+
+      if (retryCount < maxRetries) {
+        // 保存当前进度以便续传
+        try {
+          const resumeData = downloadResumable.savable();
+          const progressSnapshot = await downloadResumable.pauseAsync();
+          if (progressSnapshot && resumeData) {
+            const progress = progressSnapshot.totalBytesWritten / progressSnapshot.totalBytesExpectedToWrite;
+            await saveDownloadProgress(actionId, videoUrl, resumeData, progress);
+          }
+        } catch (saveError) {
+          console.warn('保存下载进度失败:', saveError);
+        }
+
+        // 等待后重试
+        await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
+
+        // 尝试恢复下载
+        try {
+          const resumeData = downloadResumable.savable();
+          if (resumeData) {
+            downloadResumable = new FileSystem.DownloadResumable(
+              videoUrl,
+              localPath,
+              {},
+              (downloadProgress) => {
+                const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
+                onProgress?.(progress);
+              },
+              resumeData
+            );
+          }
+        } catch (resumeError) {
+          console.warn('恢复下载失败，将重新开始:', resumeError);
+        }
+      } else {
+        // 达到最大重试次数，保存进度供用户手动重试
+        try {
+          const resumeData = downloadResumable.savable();
+          const progressSnapshot = await downloadResumable.pauseAsync();
+          if (progressSnapshot && resumeData) {
+            const progress = progressSnapshot.totalBytesWritten / progressSnapshot.totalBytesExpectedToWrite;
+            await saveDownloadProgress(actionId, videoUrl, resumeData, progress);
+          }
+        } catch (saveError) {
+          console.warn('保存下载进度失败:', saveError);
+        }
+        throw new Error(`下载失败，已重试${maxRetries}次: ${error.message || '未知错误'}`);
+      }
+    }
+  }
+
+  throw new Error('下载失败');
 }
 
 /**
@@ -137,21 +292,36 @@ export async function downloadVideo(
  */
 export async function downloadVideos(
   videos: Array<{ action_id: number; video_url: string }>,
-  onProgress?: (current: number, total: number) => void
-): Promise<void> {
+  onProgress?: (current: number, total: number, failed: number) => void
+): Promise<{ succeeded: number; failed: Array<{ action_id: number; error: string }> }> {
   let completed = 0;
+  let failed: Array<{ action_id: number; error: string }> = [];
   const total = videos.length;
 
   for (const video of videos) {
     try {
       await downloadVideo(video.action_id, video.video_url);
       completed++;
-      onProgress?.(completed, total);
-    } catch (error) {
+      onProgress?.(completed, total, failed.length);
+    } catch (error: any) {
       console.error(`下载视频失败 (action_id=${video.action_id}):`, error);
-      throw error;
+      failed.push({
+        action_id: video.action_id,
+        error: error.message || '下载失败',
+      });
+      onProgress?.(completed, total, failed.length);
     }
   }
+
+  return { succeeded: completed, failed };
+}
+
+/**
+ * 获取所有未完成的下载
+ */
+export async function getPendingDownloads(): Promise<DownloadProgress[]> {
+  const allProgress = await getDownloadProgressMap();
+  return Object.values(allProgress);
 }
 
 /**
