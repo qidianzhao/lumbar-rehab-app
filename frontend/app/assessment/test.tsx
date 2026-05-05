@@ -4,6 +4,8 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  BackHandler,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,10 +20,12 @@ import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import type { AssessmentTestItem, MetricType, TestItemSubmit } from '@/src/services/assessmentApi';
 import * as assessmentApi from '@/src/services/assessmentApi';
+import { api } from '@/src/api/client';
 import { logger } from '@/src/utils/logger';
 import { useAIVoiceChat } from '@/src/hooks/useAIVoiceChat';
 import {
   speakText,
+  stopSpeaking,
   startBgMusic,
   stopBgMusic,
 } from '@/src/services/voiceService';
@@ -53,17 +57,11 @@ function Stopwatch({ onCommit }: { onCommit: (seconds: number) => void }) {
   useEffect(() => {
     if (running) {
       intervalRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
-      // 开始计时时启动背景音乐
-      startBgMusic('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3').catch(() => {});
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
-      // 停止计时时停止背景音乐
-      if (elapsed > 0) {
-        stopBgMusic().catch(() => {});
-      }
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running, elapsed]);
+  }, [running]);
 
   const toggle = () => {
     if (running) {
@@ -133,10 +131,12 @@ export default function AssessmentTestScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [showTextInput, setShowTextInput] = useState(false);
   const [textInput, setTextInput] = useState('');
+  const [progressRestored, setProgressRestored] = useState(false); // 标记进度是否已恢复
+  const isUnmountingRef = useRef(false); // 标记组件是否正在卸载
 
   const current = items[index];
   const currentVideoUrl = current ? (videoUrls[current.action_id] ?? null) : null;
-  const player = useVideoPlayer(null, (p) => { p.loop = true; p.muted = true; });
+  const player = useVideoPlayer(currentVideoUrl, (p) => { p.loop = true; p.muted = true; });
 
   // 使用统一的AI语音交互Hook
   const { isRecording, aiMessage, isProcessing, onMicPressIn, onMicPressOut, sendTextToAI } = useAIVoiceChat({
@@ -169,15 +169,23 @@ export default function AssessmentTestScreen() {
         // 恢复保存的进度
         try {
           const saved = await AsyncStorage.getItem(ASSESSMENT_PROGRESS_KEY);
+          logger.log('尝试恢复进度，saved:', saved);
           if (saved && !cancelled) {
             const progress = JSON.parse(saved);
+            logger.log('恢复进度数据:', progress);
             setIndex(progress.index ?? 0);
             setValues(progress.values ?? {});
             setNotes(progress.notes ?? {});
+            logger.log('进度恢复完成，index:', progress.index, 'values:', progress.values);
+          } else {
+            logger.log('没有保存的进度或已取消');
           }
         } catch (e) {
           logger.error('恢复进度失败:', e);
         }
+
+        // 标记进度恢复完成，允许开始保存
+        if (!cancelled) setProgressRestored(true);
       } catch (e) {
         if (!cancelled) {
           const errorInfo = handleError(e, '加载测试项目');
@@ -200,14 +208,50 @@ export default function AssessmentTestScreen() {
     if (currentVideoUrl) player.replace({ uri: currentVideoUrl });
   }, [currentVideoUrl]);
 
-  // 动作切换时 TTS 播报，播完后播放视频
+  // 动作切换时 TTS 播报，播完后播放视频和背景音乐
   useEffect(() => {
-    if (!current) return;
+    if (!current || !progressRestored) return; // 等待进度恢复完成
+
+    let cancelled = false;
+
     player.pause();
+    // 切换动作时先停止背景音乐
+    stopBgMusic().catch(() => {});
+
     speakText(`第${index + 1}个动作：${current.name}，${current.prompt}`)
-      .then(() => { if (currentVideoUrl) player.play(); })
-      .catch(() => { if (currentVideoUrl) player.play(); });
-  }, [index, current]);
+      .then(() => {
+        if (cancelled || isUnmountingRef.current) return; // 组件已卸载，不执行后续操作
+        if (currentVideoUrl && player) {
+          try {
+            player.play();
+          } catch (e) {
+            logger.error('播放视频失败:', e);
+          }
+        }
+        // TTS 播报完成后启动背景音乐
+        if (!cancelled && !isUnmountingRef.current) {
+          startBgMusic('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3').catch(() => {});
+        }
+      })
+      .catch(() => {
+        if (cancelled || isUnmountingRef.current) return; // 组件已卸载，不执行后续操作
+        if (currentVideoUrl && player) {
+          try {
+            player.play();
+          } catch (e) {
+            logger.error('播放视频失败:', e);
+          }
+        }
+        // 即使 TTS 失败也启动背景音乐
+        if (!cancelled && !isUnmountingRef.current) {
+          startBgMusic('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3').catch(() => {});
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [progressRestored, index, current, currentVideoUrl, player]);
 
   const progress = items.length ? (index + 1) / items.length : 0;
   const currentValue = current ? values[current.action_id] : undefined;
@@ -216,21 +260,59 @@ export default function AssessmentTestScreen() {
 
   // 保存进度到本地存储
   useEffect(() => {
-    if (items.length === 0) return;
+    logger.log('保存进度 useEffect 触发, progressRestored:', progressRestored, 'items.length:', items.length, 'index:', index);
+    if (!progressRestored) {
+      logger.log('进度尚未恢复，跳过保存');
+      return;
+    }
+    if (items.length === 0) {
+      logger.log('items 为空，跳过保存');
+      return;
+    }
     const saveProgress = async () => {
       try {
-        await AsyncStorage.setItem(ASSESSMENT_PROGRESS_KEY, JSON.stringify({
+        const progressData = {
           index,
           values,
           notes,
           timestamp: new Date().toISOString(),
-        }));
+        };
+        logger.log('保存进度:', progressData);
+        await AsyncStorage.setItem(ASSESSMENT_PROGRESS_KEY, JSON.stringify(progressData));
+        logger.log('进度保存成功');
       } catch (e) {
         logger.error('保存进度失败:', e);
       }
     };
     void saveProgress();
-  }, [index, values, notes, items.length]);
+  }, [progressRestored, index, values, notes, items.length]);
+
+  // 返回键拦截
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      Alert.alert(
+        '确认退出',
+        '测试进度将会保存，您可以稍后继续',
+        [
+          { text: '取消', style: 'cancel' },
+          {
+            text: '退出',
+            onPress: async () => {
+              // 立即设置卸载标志，阻止后续的媒体播放
+              isUnmountingRef.current = true;
+              // 停止所有媒体：TTS、视频、背景音乐
+              stopSpeaking();
+              player.pause();
+              await stopBgMusic().catch(() => {});
+              router.back();
+            }
+          }
+        ]
+      );
+      return true;
+    });
+    return () => backHandler.remove();
+  }, [router, player]);
 
   function setCurrentValue(v: number) {
     if (!current) return;
@@ -254,6 +336,14 @@ export default function AssessmentTestScreen() {
 
   async function onSubmitAll() {
     if (items.length === 0) return;
+
+    // 立即设置卸载标志，阻止后续的媒体播放
+    isUnmountingRef.current = true;
+    // 停止所有媒体：TTS、视频、背景音乐
+    stopSpeaking();
+    player.pause();
+    await stopBgMusic().catch(() => {});
+
     const payload: TestItemSubmit[] = items.map((it) => ({
       action_id: it.action_id,
       metric_value: values[it.action_id] ?? 0,
@@ -269,6 +359,8 @@ export default function AssessmentTestScreen() {
     } catch (e) {
       const errorInfo = handleError(e, '提交测试结果');
       setError(errorInfo.message);
+      // 提交失败时重置卸载标志，允许继续测试
+      isUnmountingRef.current = false;
     } finally {
       setSubmitting(false);
     }

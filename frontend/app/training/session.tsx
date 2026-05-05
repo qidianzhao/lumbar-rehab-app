@@ -2,7 +2,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { type Href, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View, Modal } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, Pressable, StyleSheet, Text, TextInput, View, Modal } from 'react-native';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -56,6 +56,7 @@ export default function TrainingSessionScreen() {
   const pausedRef = useRef(false);
   const prevPausedRef = useRef(false);
   const prevActionIndexRef = useRef(-1);
+  const prevCountdownRef = useRef(0);
 
   const current = actions[currentActionIndex] ?? null;
   const player = useVideoPlayer(null, (p) => { p.loop = true; p.muted = true; });
@@ -111,7 +112,14 @@ export default function TrainingSessionScreen() {
 
   // 倒计时归零时自动推进
   useEffect(() => {
-    if (countdown !== 0 || phase === 'finished' || !current) return;
+    // 只在倒计时从非零变为零时触发（真正的倒计时结束）
+    const wasCountingDown = prevCountdownRef.current > 0;
+    const justReachedZero = countdown === 0 && wasCountingDown;
+
+    // 每次都更新 ref，记录当前倒计时值
+    prevCountdownRef.current = countdown;
+
+    if (!justReachedZero || phase === 'finished' || !current) return;
 
     const handleCountdownZero = async () => {
       if (phase === 'exercising') {
@@ -205,10 +213,20 @@ export default function TrainingSessionScreen() {
     const finish = async () => {
       setBusy(true);
       try {
+        logger.log('开始保存训练数据...');
         await finishTraining();
-        reset(); // 清除持久化的训练状态
+        logger.log('训练数据保存成功');
+        // 不在这里调用 reset()，等用户离开完成页面时再清理
+        await stopBgMusic(); // 停止背景音乐
+      } catch (e) {
+        logger.error('保存训练数据失败:', e);
+        // 即使保存失败，也要停止背景音乐并显示完成界面
+        await stopBgMusic();
       } finally {
-        if (!cancelled) setBusy(false);
+        if (!cancelled) {
+          logger.log('设置 busy = false');
+          setBusy(false);
+        }
       }
     };
     finish();
@@ -216,27 +234,43 @@ export default function TrainingSessionScreen() {
   }, [phase]);
 
   const onViewReport = useCallback(() => {
+    reset(); // 清除训练状态
     router.replace('/training/report' as Href);
-  }, []);
+  }, [reset]);
 
   const onBackHome = useCallback(() => {
+    reset(); // 清除训练状态
     router.replace('/(tabs)' as Href);
-  }, []);
+  }, [reset]);
 
   const onSkip = useCallback(async () => {
     if (busy) return;
     setBusy(true);
     stopSpeaking();
     try {
-      await skipCurrentAction();
       if (voiceEnabled) {
-        // 等待AI语音播放完成，避免重叠
+        // 先播放"已跳过"语音，等待播放完成
         await waitForSpeechEnd(3000);
-        speakText('已跳过，进入下一个动作').catch(() => {});
+        await speakText('已跳过，进入下一个动作');
+      }
+      // 语音播放完成后再跳过动作，这样下一个动作的语音不会重叠
+      await skipCurrentAction();
+
+      // 检查训练是否完成
+      const s = useTrainingStore.getState();
+      if (s.isWorkoutFlowDone()) {
+        logger.log('跳过后检测到训练完成');
+        setPhase('finished');
+        if (voiceEnabled) {
+          await waitForSpeechEnd(3000);
+          const totalActions = actions.length;
+          const summary = `训练完成，干得漂亮！你完成了${totalActions}个动作的训练，继续保持，你会越来越强！`;
+          speakText(summary).catch(() => {});
+        }
       }
     }
     finally { setBusy(false); }
-  }, [busy, skipCurrentAction, voiceEnabled]);
+  }, [busy, skipCurrentAction, voiceEnabled, actions.length]);
 
   const handleTextSubmit = useCallback(async () => {
     if (!textInput.trim() || isProcessing) return;
@@ -253,6 +287,36 @@ export default function TrainingSessionScreen() {
     startBgMusic('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3').catch(() => {});
     return () => { stopBgMusic().catch(() => {}); };
   }, []);
+
+  // 拦截返回键，防止误触退出训练
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // 如果训练已完成，允许直接返回
+      if (phase === 'finished') {
+        return false;
+      }
+
+      // 训练进行中，弹出确认对话框
+      Alert.alert(
+        '确认退出',
+        '训练进度将会保存，您可以稍后继续训练。确定要退出吗？',
+        [
+          { text: '取消', style: 'cancel' },
+          {
+            text: '退出',
+            style: 'destructive',
+            onPress: () => {
+              stopBgMusic().catch(() => {});
+              router.back();
+            }
+          }
+        ]
+      );
+      return true; // 阻止默认返回行为
+    });
+
+    return () => backHandler.remove();
+  }, [phase, router]);
 
   // 检查网络
   useEffect(() => {
@@ -320,17 +384,6 @@ export default function TrainingSessionScreen() {
     })();
   }, [currentActionIndex, current, isOnline, voiceEnabled, getVideoUrl]);
 
-  if (!sessionId || actions.length === 0) {
-    return (
-      <View style={[styles.center, { backgroundColor: theme.background }]}>
-        <Text style={{ color: theme.text }}>请先完成训练前确认</Text>
-        <Pressable style={[styles.btn, { backgroundColor: theme.tint }]} onPress={() => router.replace('/training/pre-check' as Href)}>
-          <Text style={styles.btnText}>去确认</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
   if (phase === 'finished') {
     return (
       <View style={[styles.center, { backgroundColor: theme.background }]}>
@@ -354,6 +407,17 @@ export default function TrainingSessionScreen() {
             </Pressable>
           </View>
         )}
+      </View>
+    );
+  }
+
+  if (!sessionId || actions.length === 0) {
+    return (
+      <View style={[styles.center, { backgroundColor: theme.background }]}>
+        <Text style={{ color: theme.text }}>请先完成训练前确认</Text>
+        <Pressable style={[styles.btn, { backgroundColor: theme.tint }]} onPress={() => router.replace('/training/pre-check' as Href)}>
+          <Text style={styles.btnText}>去确认</Text>
+        </Pressable>
       </View>
     );
   }

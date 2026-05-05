@@ -3,11 +3,15 @@ import { type Href, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import * as planApi from '@/src/services/planApi';
 import * as trainingApi from '@/src/services/trainingApi';
+import { useTrainingStore } from '@/src/stores/trainingStore';
+
+const ASSESSMENT_PROGRESS_KEY = '@assessment_progress';
 
 const PHASE_LABEL: Record<string, string> = {
   warmup: '热身', core: '核心', stretch: '拉伸',
@@ -20,11 +24,26 @@ export default function HomeScreen() {
   const [plan, setPlan] = useState<planApi.TrainingPlan | null | undefined>(undefined);
   const [completedDays, setCompletedDays] = useState(0);
 
+  // 检查是否有未完成的训练会话
+  const sessionId = useTrainingStore((s) => s.sessionId);
+  const hasUnfinishedSession = sessionId !== null;
+
+  // 检查是否有未完成的体能测试
+  const [hasUnfinishedAssessment, setHasUnfinishedAssessment] = useState(false);
+
   useFocusEffect(useCallback(() => {
     let cancelled = false;
 
     async function loadData() {
       try {
+        // 检查未完成的体能测试
+        const assessmentProgress = await AsyncStorage.getItem(ASSESSMENT_PROGRESS_KEY);
+        console.log('[首页] 检查体能测试进度:', assessmentProgress);
+        if (!cancelled) {
+          setHasUnfinishedAssessment(!!assessmentProgress);
+          console.log('[首页] hasUnfinishedAssessment 设置为:', !!assessmentProgress);
+        }
+
         const p = await planApi.getCurrentPlan();
         if (cancelled) return;
         setPlan(p);
@@ -88,6 +107,18 @@ export default function HomeScreen() {
             <FontAwesome name="calendar-o" size={36} color={theme.tabIconDefault} />
             <Text style={[styles.emptyTitle, { color: theme.text }]}>还没有训练计划</Text>
             <Text style={[styles.muted, { color: theme.text }]}>先完成体能测试，再生成专属计划</Text>
+
+            {/* 未完成的体能测试提示 */}
+            {hasUnfinishedAssessment && (
+              <Pressable
+                style={[styles.resumeBanner, { backgroundColor: '#ff9800', marginTop: 12 }]}
+                onPress={() => router.push('/assessment/test' as Href)}
+              >
+                <FontAwesome name="exclamation-circle" size={16} color="#fff" />
+                <Text style={styles.resumeText}>继续未完成的测试</Text>
+              </Pressable>
+            )}
+
             <View style={styles.emptyBtns}>
               <Pressable style={[styles.btn, { backgroundColor: theme.tint }]} onPress={() => router.push('/assessment' as Href)}>
                 <Text style={styles.btnText}>去体能测试</Text>
@@ -102,6 +133,14 @@ export default function HomeScreen() {
         {/* 有计划 → 今日训练卡片 */}
         {plan && todayDay && (
           <View style={[styles.todayCard, { borderColor: theme.tint, backgroundColor: `${theme.tint}08` }]}>
+            {/* 未完成的训练会话提示 */}
+            {hasUnfinishedSession && (
+              <View style={[styles.resumeBanner, { backgroundColor: '#ff9800', marginBottom: 12 }]}>
+                <FontAwesome name="exclamation-circle" size={16} color="#fff" />
+                <Text style={styles.resumeText}>您有未完成的训练</Text>
+              </View>
+            )}
+
             <View style={styles.todayHeader}>
               <FontAwesome name="bolt" size={15} color={theme.tint} />
               <Text style={[styles.todayLabel, { color: theme.tint }]}>今日训练</Text>
@@ -124,12 +163,23 @@ export default function HomeScreen() {
               );
             })}
 
-            <Pressable
-              style={[styles.startBtn, { backgroundColor: theme.tint }]}
-              onPress={() => void onStartTraining()}
-            >
-              <FontAwesome name="play" size={14} color="#fff" /><Text style={styles.startBtnText}>开始训练</Text>
-            </Pressable>
+            {hasUnfinishedSession ? (
+              <Pressable
+                style={[styles.startBtn, { backgroundColor: '#ff9800' }]}
+                onPress={() => router.push('/training/session' as Href)}
+              >
+                <FontAwesome name="refresh" size={14} color="#fff" />
+                <Text style={styles.startBtnText}>继续训练</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                style={[styles.startBtn, { backgroundColor: theme.tint }]}
+                onPress={() => void onStartTraining()}
+              >
+                <FontAwesome name="play" size={14} color="#fff" />
+                <Text style={styles.startBtnText}>开始训练</Text>
+              </Pressable>
+            )}
           </View>
         )}
 
@@ -222,6 +272,8 @@ const styles = StyleSheet.create({
   emptyBtns: { flexDirection: 'row', gap: 10, marginTop: 8 },
   muted: { fontSize: 13, opacity: 0.65, textAlign: 'center' },
   todayCard: { borderWidth: 1.5, borderRadius: 14, padding: 16, marginBottom: 16 },
+  resumeBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 8 },
+  resumeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   todayHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   todayLabel: { fontSize: 12, fontWeight: '700' },
   todayName: { fontSize: 18, fontWeight: '800', marginBottom: 4 },

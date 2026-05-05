@@ -1,6 +1,6 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { type Href, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { type Href, useRouter, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -44,18 +44,13 @@ export default function AssessmentIntroScreen() {
   const [error, setError] = useState<string | null>(null);
   const [hasSavedProgress, setHasSavedProgress] = useState(false);
 
+  // 加载测试项目（只在首次加载时执行）
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const list = await getTestItems();
         if (!cancelled) setItems(list);
-
-        // 检查是否有保存的进度
-        const saved = await AsyncStorage.getItem(ASSESSMENT_PROGRESS_KEY);
-        if (!cancelled && saved) {
-          setHasSavedProgress(true);
-        }
       } catch (e) {
         if (!cancelled) {
           const errorInfo = handleError(e, '加载测试项目');
@@ -67,6 +62,24 @@ export default function AssessmentIntroScreen() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // 每次页面获得焦点时检查是否有保存的进度
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void (async () => {
+        try {
+          const saved = await AsyncStorage.getItem(ASSESSMENT_PROGRESS_KEY);
+          if (!cancelled) {
+            setHasSavedProgress(!!saved);
+          }
+        } catch (e) {
+          // 忽略错误
+        }
+      })();
+      return () => { cancelled = true; };
+    }, [])
+  );
 
   return (
     <ScrollView
