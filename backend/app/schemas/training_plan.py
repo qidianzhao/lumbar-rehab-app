@@ -69,3 +69,13 @@ class UpdatePlanDayExerciseRequest(BaseModel):
 
 class UpdatePlanDayRequest(BaseModel):
     exercises: list[UpdatePlanDayExerciseRequest] = Field(description="动作列表")
+
+
+class AIPlanModifyRequest(BaseModel):
+    instruction: str = Field(description="用户的修改指令，例如：'增加核心训练强度'、'减少拉伸时间'")
+
+
+class AIPlanModifyResponse(BaseModel):
+    success: bool
+    message: str
+    modified_exercises: list[PlanExerciseResponse] | None = None

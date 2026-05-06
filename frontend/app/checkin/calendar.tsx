@@ -54,7 +54,8 @@ export default function CheckinCalendarScreen() {
       setStreak(data.streak_days);
       setTotal(data.total_days);
     } catch (e) {
-      setError(handleError(e, '加载失败'));
+      const errorInfo = handleError(e, '加载失败');
+      setError(errorInfo.message);
     } finally {
       setLoading(false);
     }

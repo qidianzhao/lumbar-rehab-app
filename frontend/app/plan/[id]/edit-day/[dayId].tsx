@@ -36,6 +36,9 @@ export default function EditPlanDayScreen() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [aiModifying, setAiModifying] = useState(false);
+  const [showAiInput, setShowAiInput] = useState(false);
+  const [aiInstruction, setAiInstruction] = useState('');
   const [planDay, setPlanDay] = useState<PlanDay | null>(null);
   const [exercises, setExercises] = useState<EditableExercise[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +65,8 @@ export default function EditPlanDayScreen() {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(handleError(e, '加载失败'));
+          const errorInfo = handleError(e, '加载失败');
+          setError(errorInfo.message);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -130,11 +134,46 @@ export default function EditPlanDayScreen() {
         { text: '确定', onPress: () => router.back() },
       ]);
     } catch (e) {
-      const errorMsg = handleError(e, '保存失败');
-      setError(errorMsg);
-      Alert.alert('保存失败', errorMsg);
+      const errorInfo = handleError(e, '保存失败');
+      setError(errorInfo.message);
+      Alert.alert('保存失败', errorInfo.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAiModify = async () => {
+    if (!aiInstruction.trim()) {
+      Alert.alert('提示', '请输入修改指令');
+      return;
+    }
+
+    setAiModifying(true);
+    setError(null);
+
+    try {
+      const result = await planApi.aiModifyPlanDay(planId, planDayId, {
+        instruction: aiInstruction.trim(),
+      });
+
+      if (result.success && result.modified_exercises) {
+        // 更新本地exercises状态
+        setExercises(result.modified_exercises.map((ex, idx) => ({
+          ...ex,
+          sort_order: idx,
+        })));
+        Alert.alert('AI修改成功', result.message);
+        setAiInstruction('');
+        setShowAiInput(false);
+      } else {
+        Alert.alert('AI修改失败', result.message);
+      }
+    } catch (e) {
+      const errorInfo = handleError(e, 'AI修改失败');
+      setError(errorInfo.message);
+      Alert.alert('AI修改失败', errorInfo.message);
+    } finally {
+      setAiModifying(false);
     }
   };
 
@@ -172,14 +211,54 @@ export default function EditPlanDayScreen() {
           </View>
         ) : null}
 
+        {/* AI助手区域 */}
+        <View style={[styles.aiSection, { borderColor: theme.tabIconDefault }]}>
+          <Pressable
+            style={[styles.aiToggleBtn, { backgroundColor: showAiInput ? theme.tint : 'transparent' }]}
+            onPress={() => setShowAiInput(!showAiInput)}
+          >
+            <Text style={[styles.aiToggleText, { color: showAiInput ? '#fff' : theme.tint }]}>
+              🤖 AI助手
+            </Text>
+          </Pressable>
+
+          {showAiInput && (
+            <View style={styles.aiInputContainer}>
+              <TextInput
+                style={[styles.aiInput, { borderColor: theme.tabIconDefault, color: theme.text }]}
+                value={aiInstruction}
+                onChangeText={setAiInstruction}
+                placeholder="例如：增加核心训练强度、减少拉伸时间、添加平板支撑..."
+                placeholderTextColor={theme.tabIconDefault}
+                multiline
+                numberOfLines={3}
+              />
+              <Pressable
+                style={[styles.aiSubmitBtn, { backgroundColor: theme.tint, opacity: aiModifying ? 0.5 : 1 }]}
+                onPress={handleAiModify}
+                disabled={aiModifying}
+              >
+                {aiModifying ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.aiSubmitText}>应用修改</Text>
+                )}
+              </Pressable>
+            </View>
+          )}
+        </View>
+
         <View style={styles.exerciseList}>
           {exercises.map((ex, idx) => (
             <View key={ex.id || ex._tempId} style={[styles.exerciseCard, { borderColor: theme.tabIconDefault }]}>
+              {/* 紧凑标题行：动作名 + 热身标记 */}
               <View style={styles.exerciseHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.exerciseName, { color: theme.text }]}>{ex.name}</Text>
-                  <Text style={[styles.exercisePhase, { color: theme.tint }]}>
-                    {PHASE_LABEL[ex.phase] ?? ex.phase}
+                  <Text style={[styles.exerciseName, { color: theme.text }]}>
+                    {idx + 1}. {ex.name}
+                    {ex.phase === 'warmup' && (
+                      <Text style={[styles.warmupTag, { color: theme.text }]}> (热身)</Text>
+                    )}
                   </Text>
                 </View>
                 <View style={styles.exerciseActions}>
@@ -188,48 +267,54 @@ export default function EditPlanDayScreen() {
                     onPress={() => moveExercise(idx, 'up')}
                     disabled={idx === 0}
                   >
-                    <FontAwesome name="arrow-up" size={16} color={theme.tint} />
+                    <FontAwesome name="arrow-up" size={14} color={theme.tint} />
                   </Pressable>
                   <Pressable
                     style={[styles.iconBtn, { opacity: idx === exercises.length - 1 ? 0.3 : 1 }]}
                     onPress={() => moveExercise(idx, 'down')}
                     disabled={idx === exercises.length - 1}
                   >
-                    <FontAwesome name="arrow-down" size={16} color={theme.tint} />
+                    <FontAwesome name="arrow-down" size={14} color={theme.tint} />
                   </Pressable>
                   <Pressable style={styles.iconBtn} onPress={() => deleteExercise(idx)}>
-                    <FontAwesome name="trash-o" size={16} color="#e53935" />
+                    <FontAwesome name="trash-o" size={14} color="#e53935" />
                   </Pressable>
                 </View>
               </View>
 
-              <View style={styles.inputRow}>
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.inputLabel, { color: theme.text }]}>组数</Text>
+              {/* 紧凑参数行：组数×次数 · 休息时间 */}
+              <View style={styles.compactRow}>
+                <View style={styles.compactInputGroup}>
                   <TextInput
-                    style={[styles.input, { borderColor: theme.tabIconDefault, color: theme.text }]}
+                    style={[styles.compactInput, { borderColor: theme.tabIconDefault, color: theme.text }]}
                     value={String(ex.sets)}
                     onChangeText={(v) => updateExercise(idx, 'sets', Number(v) || 0)}
                     keyboardType="number-pad"
+                    placeholder="组"
                   />
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.inputLabel, { color: theme.text }]}>次数</Text>
+                  <Text style={[styles.compactLabel, { color: theme.text }]}>组 ×</Text>
                   <TextInput
-                    style={[styles.input, { borderColor: theme.tabIconDefault, color: theme.text }]}
+                    style={[styles.compactInput, { borderColor: theme.tabIconDefault, color: theme.text }]}
                     value={String(ex.reps)}
                     onChangeText={(v) => updateExercise(idx, 'reps', Number(v) || 0)}
                     keyboardType="number-pad"
+                    placeholder="次"
                   />
+                  <Text style={[styles.compactLabel, { color: theme.text }]}>次</Text>
                 </View>
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.inputLabel, { color: theme.text }]}>休息(秒)</Text>
+
+                <Text style={[styles.separator, { color: theme.text }]}>·</Text>
+
+                <View style={styles.compactInputGroup}>
+                  <Text style={[styles.compactLabel, { color: theme.text }]}>休息</Text>
                   <TextInput
-                    style={[styles.input, { borderColor: theme.tabIconDefault, color: theme.text }]}
+                    style={[styles.compactInput, { borderColor: theme.tabIconDefault, color: theme.text }]}
                     value={String(ex.rest_seconds)}
                     onChangeText={(v) => updateExercise(idx, 'rest_seconds', Number(v) || 0)}
                     keyboardType="number-pad"
+                    placeholder="秒"
                   />
+                  <Text style={[styles.compactLabel, { color: theme.text }]}>秒</Text>
                 </View>
               </View>
             </View>
@@ -268,38 +353,87 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 16, opacity: 0.85, marginBottom: 16 },
   errorBanner: { padding: 12, borderRadius: 8, marginBottom: 16 },
   errorText: { color: '#c62828', fontSize: 14 },
+  aiSection: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  aiToggleBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  aiToggleText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  aiInputContainer: {
+    marginTop: 12,
+    gap: 12,
+  },
+  aiInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  aiSubmitBtn: {
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  aiSubmitText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
   exerciseList: { gap: 12 },
   exerciseCard: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
-    padding: 12,
+    padding: 14,
+    gap: 10,
   },
   exerciseHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  exerciseName: { fontSize: 16, fontWeight: '600', marginBottom: 4 },
-  exercisePhase: { fontSize: 13, fontWeight: '600' },
-  exerciseActions: { flexDirection: 'row', gap: 8 },
+  exerciseName: { fontSize: 15, fontWeight: '600' },
+  warmupTag: { fontSize: 13, fontWeight: '400', opacity: 0.6 },
+  exerciseActions: { flexDirection: 'row', gap: 4 },
   iconBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  inputRow: { flexDirection: 'row', gap: 10 },
-  inputGroup: { flex: 1 },
-  inputLabel: { fontSize: 13, marginBottom: 6, fontWeight: '600' },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    fontSize: 15,
-    textAlign: 'center',
+  compactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
+  compactInputGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  compactInput: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    fontSize: 14,
+    textAlign: 'center',
+    minWidth: 45,
+  },
+  compactLabel: { fontSize: 13, opacity: 0.7 },
+  separator: { fontSize: 14, opacity: 0.4, marginHorizontal: 4 },
   footer: {
     position: 'absolute',
     left: 0,

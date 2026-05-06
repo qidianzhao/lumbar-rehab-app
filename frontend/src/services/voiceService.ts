@@ -92,9 +92,9 @@ export async function stopRecordingAndRecognize(): Promise<string> {
     const formData = new FormData();
     formData.append('audio', { uri, name: `audio.${ext}`, type: mimeType } as any);
 
-    // 添加10秒超时
+    // 添加20秒超时（ASR处理需要时间）
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     try {
       const res = await api.post<{ code: number; data: { text: string } }>(
@@ -211,8 +211,4 @@ export function stopSpeaking(): void {
     _sound = null;
   }
   _speaking = false;
-}
-
-export function isSpeaking(): boolean {
-  return _speaking;
 }

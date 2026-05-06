@@ -16,11 +16,13 @@ import { useColorScheme } from '@/components/useColorScheme';
 import * as planApi from '@/src/services/planApi';
 import { handleError } from '@/src/utils/errorHandler';
 
-const LEVEL_LABEL: Record<string, string> = {
-  beginner: '入门',
-  intermediate: '进阶',
-  advanced: '强化',
-};
+const PLAN_TYPE_TABS = [
+  { key: 'training', label: '训练方案', icon: 'heartbeat' },
+  { key: 'stretch', label: '拉伸方案', icon: 'hand-peace-o' },
+  { key: 'eye_exercise', label: '眼保健操', icon: 'eye' },
+] as const;
+
+type PlanType = typeof PLAN_TYPE_TABS[number]['key'];
 
 const STATUS_LABEL: Record<string, string> = {
   draft: '草稿',
@@ -28,22 +30,14 @@ const STATUS_LABEL: Record<string, string> = {
   archived: '已归档',
 };
 
-const WEEKDAY_LABEL = ['一', '二', '三', '四', '五', '六', '日'];
-
-type QuickAction = {
-  icon: React.ComponentProps<typeof FontAwesome>['name'];
-  label: string;
-  href: Href;
-  color: string;
-};
-
 export default function ProgramScreen() {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [plan, setPlan] = useState<planApi.TrainingPlan | null>(null);
+  const [plans, setPlans] = useState<planApi.TrainingPlan[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<PlanType>('training');
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -51,13 +45,14 @@ export default function ProgramScreen() {
       setLoading(true);
       setError(null);
       try {
-        const p = await planApi.getCurrentPlan();
+        // TODO: 后端API需要支持按plan_type筛选
+        const allPlans = await planApi.getMyPlans();
         if (!cancelled) {
-          setPlan(p);
+          setPlans(allPlans);
         }
       } catch (e) {
         if (!cancelled) {
-          const errorInfo = handleError(e, '加载计划');
+          const errorInfo = handleError(e, '加载方案');
           setError(errorInfo.message);
         }
       } finally {
@@ -69,12 +64,8 @@ export default function ProgramScreen() {
 
   useFocusEffect(load);
 
-  const quickActions: QuickAction[] = [
-    { icon: 'plus-circle', label: '生成方案', href: '/plans/generate' as Href, color: theme.tint },
-    { icon: 'list-ul', label: '动作库', href: '/actions' as Href, color: '#FF9800' },
-    { icon: 'history', label: '训练记录', href: '/(tabs)/records' as Href, color: '#4CAF50' },
-    { icon: 'comments', label: 'AI助手', href: '/chat' as Href, color: '#9C27B0' },
-  ];
+  // 按类型筛选方案
+  const filteredPlans = plans.filter((p) => (p.plan_type ?? 'training') === activeTab);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top']}>
@@ -83,16 +74,62 @@ export default function ProgramScreen() {
 
         {/* 快捷操作 */}
         <View style={styles.quickActions}>
-          {quickActions.map((action) => (
+          <Pressable
+            style={[styles.quickBtn, { borderColor: theme.tabIconDefault }]}
+            onPress={() => router.push('/plan/generate' as Href)}
+          >
+            <View style={[styles.quickIcon, { backgroundColor: `${theme.tint}15` }]}>
+              <FontAwesome name="plus-circle" size={20} color={theme.tint} />
+            </View>
+            <Text style={[styles.quickLabel, { color: theme.text }]}>生成方案</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.quickBtn, { borderColor: theme.tabIconDefault }]}
+            onPress={() => router.push('/actions' as Href)}
+          >
+            <View style={[styles.quickIcon, { backgroundColor: '#FF980015' }]}>
+              <FontAwesome name="list-ul" size={20} color="#FF9800" />
+            </View>
+            <Text style={[styles.quickLabel, { color: theme.text }]}>动作库</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.quickBtn, { borderColor: theme.tabIconDefault }]}
+            onPress={() => router.push('/chat' as Href)}
+          >
+            <View style={[styles.quickIcon, { backgroundColor: '#9C27B015' }]}>
+              <FontAwesome name="comments" size={20} color="#9C27B0" />
+            </View>
+            <Text style={[styles.quickLabel, { color: theme.text }]}>AI助手</Text>
+          </Pressable>
+        </View>
+
+        {/* 方案类型Tab */}
+        <View style={styles.tabs}>
+          {PLAN_TYPE_TABS.map((tab) => (
             <Pressable
-              key={action.label}
-              style={[styles.quickBtn, { borderColor: theme.tabIconDefault }]}
-              onPress={() => router.push(action.href)}
+              key={tab.key}
+              style={[
+                styles.tab,
+                { borderColor: theme.tabIconDefault },
+                activeTab === tab.key && { backgroundColor: theme.tint, borderColor: theme.tint },
+              ]}
+              onPress={() => setActiveTab(tab.key)}
             >
-              <View style={[styles.quickIcon, { backgroundColor: `${action.color}15` }]}>
-                <FontAwesome name={action.icon} size={20} color={action.color} />
-              </View>
-              <Text style={[styles.quickLabel, { color: theme.text }]}>{action.label}</Text>
+              <FontAwesome
+                name={tab.icon}
+                size={16}
+                color={activeTab === tab.key ? '#fff' : theme.text}
+              />
+              <Text
+                style={[
+                  styles.tabText,
+                  { color: activeTab === tab.key ? '#fff' : theme.text },
+                ]}
+              >
+                {tab.label}
+              </Text>
             </Pressable>
           ))}
         </View>
@@ -117,16 +154,16 @@ export default function ProgramScreen() {
         )}
 
         {/* 无方案 */}
-        {!loading && !error && !plan && (
+        {!loading && !error && filteredPlans.length === 0 && (
           <View style={[styles.emptyCard, { borderColor: theme.tabIconDefault }]}>
             <FontAwesome name="calendar-o" size={48} color={theme.tabIconDefault} />
-            <Text style={[styles.emptyTitle, { color: theme.text }]}>还没有训练方案</Text>
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>还没有{PLAN_TYPE_TABS.find(t => t.key === activeTab)?.label}</Text>
             <Text style={[styles.emptySub, { color: theme.text }]}>
               点击上方"生成方案"按钮，让AI为你定制专属训练计划
             </Text>
             <Pressable
               style={[styles.createBtn, { backgroundColor: theme.tint }]}
-              onPress={() => router.push('/plans/generate' as Href)}
+              onPress={() => router.push('/plan/generate' as Href)}
             >
               <FontAwesome name="plus" size={16} color="#fff" />
               <Text style={styles.createText}>生成方案</Text>
@@ -134,88 +171,69 @@ export default function ProgramScreen() {
           </View>
         )}
 
-        {/* 当前方案 */}
-        {!loading && !error && plan && (
-          <>
-            <View style={[styles.card, { borderColor: theme.tabIconDefault }]}>
-              <View style={styles.cardHeader}>
-                <Text style={[styles.cardTitle, { color: theme.text }]}>当前方案</Text>
-                <View style={[styles.statusBadge, { backgroundColor: `${theme.tint}15` }]}>
-                  <Text style={[styles.statusText, { color: theme.tint }]}>
-                    {STATUS_LABEL[plan.status] ?? plan.status}
-                  </Text>
+        {/* 方案列表 */}
+        {!loading && !error && filteredPlans.length > 0 && (
+          <View style={styles.planList}>
+            {filteredPlans.map((plan) => (
+              <View key={plan.id} style={[styles.planCard, { borderColor: theme.tabIconDefault }]}>
+                <View style={styles.planHeader}>
+                  <View style={styles.planTitleRow}>
+                    <FontAwesome name="file-text-o" size={18} color={theme.tint} />
+                    <Text style={[styles.planName, { color: theme.text }]}>{plan.name}</Text>
+                  </View>
+                  <View style={[styles.statusBadge, { backgroundColor: `${theme.tint}15` }]}>
+                    <Text style={[styles.statusText, { color: theme.tint }]}>
+                      {STATUS_LABEL[plan.status] ?? plan.status}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.planMeta}>
+                  <View style={styles.metaItem}>
+                    <FontAwesome name="list" size={12} color={theme.text} style={{ opacity: 0.5 }} />
+                    <Text style={[styles.metaText, { color: theme.text }]}>
+                      {plan.total_actions ?? 0}个动作
+                    </Text>
+                  </View>
+                  <View style={styles.metaItem}>
+                    <FontAwesome name="clock-o" size={12} color={theme.text} style={{ opacity: 0.5 }} />
+                    <Text style={[styles.metaText, { color: theme.text }]}>
+                      {plan.duration_minutes ?? plan.estimated_duration_minutes ?? 25}分钟
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.planActions}>
+                  <Pressable
+                    style={[styles.actionBtn, { backgroundColor: theme.tint }]}
+                    onPress={() => router.push(`/training/start?planId=${plan.id}` as Href)}
+                  >
+                    <FontAwesome name="play" size={14} color="#fff" />
+                    <Text style={styles.actionBtnText}>开始</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[styles.actionBtn, styles.actionBtnOutline, { borderColor: theme.tint }]}
+                    onPress={() => router.push(`/plan/${plan.id}` as Href)}
+                  >
+                    <FontAwesome name="edit" size={14} color={theme.tint} />
+                    <Text style={[styles.actionBtnTextOutline, { color: theme.tint }]}>编辑</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[styles.actionBtn, styles.actionBtnOutline, { borderColor: theme.tint }]}
+                    onPress={() => {
+                      // TODO: 实现AI优化功能
+                      alert('AI优化功能开发中');
+                    }}
+                  >
+                    <FontAwesome name="magic" size={14} color={theme.tint} />
+                    <Text style={[styles.actionBtnTextOutline, { color: theme.tint }]}>AI优化</Text>
+                  </Pressable>
                 </View>
               </View>
-
-              <View style={styles.planInfo}>
-                <View style={styles.infoRow}>
-                  <FontAwesome name="trophy" size={14} color={theme.tint} />
-                  <Text style={[styles.infoLabel, { color: theme.text }]}>难度：</Text>
-                  <Text style={[styles.infoValue, { color: theme.text }]}>
-                    {LEVEL_LABEL[plan.difficulty_level] ?? plan.difficulty_level}
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <FontAwesome name="calendar" size={14} color={theme.tint} />
-                  <Text style={[styles.infoLabel, { color: theme.text }]}>周期：</Text>
-                  <Text style={[styles.infoValue, { color: theme.text }]}>
-                    {plan.total_weeks}周 · 每周{plan.weekly_frequency}次
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <FontAwesome name="clock-o" size={14} color={theme.tint} />
-                  <Text style={[styles.infoLabel, { color: theme.text }]}>时长：</Text>
-                  <Text style={[styles.infoValue, { color: theme.text }]}>
-                    约{plan.estimated_duration_minutes}分钟/次
-                  </Text>
-                </View>
-              </View>
-
-              <Pressable
-                style={[styles.viewBtn, { backgroundColor: theme.tint }]}
-                onPress={() => router.push(`/plan/${plan.id}` as Href)}
-              >
-                <Text style={styles.viewText}>查看详情</Text>
-                <FontAwesome name="chevron-right" size={12} color="#fff" />
-              </Pressable>
-            </View>
-
-            {/* 本周训练日历 */}
-            <View style={[styles.card, { borderColor: theme.tabIconDefault }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>本周训练日历</Text>
-              <View style={styles.weekGrid}>
-                {WEEKDAY_LABEL.map((day, idx) => {
-                  const dayNum = idx + 1;
-                  const dayPlan = plan.days.find(
-                    (d) => d.week_number === plan.progress_week && d.day_number === dayNum
-                  );
-                  const isToday = new Date().getDay() === (idx === 6 ? 0 : idx + 1);
-                  const isCompleted = dayPlan?.is_completed ?? false;
-
-                  return (
-                    <View key={day} style={styles.dayCell}>
-                      <Text style={[styles.dayLabel, { color: theme.text }]}>{day}</Text>
-                      <View
-                        style={[
-                          styles.dayCircle,
-                          { borderColor: theme.tabIconDefault },
-                          isToday && { borderColor: theme.tint, borderWidth: 2 },
-                          isCompleted && { backgroundColor: theme.tint },
-                        ]}
-                      >
-                        {isCompleted && <FontAwesome name="check" size={12} color="#fff" />}
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-              <Text style={[styles.weekProgress, { color: theme.text }]}>
-                本周进度：第{plan.progress_week}周 · 已完成
-                {plan.days.filter((d) => d.week_number === plan.progress_week && d.is_completed).length}/
-                {plan.weekly_frequency}次
-              </Text>
-            </View>
-          </>
+            ))}
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -247,6 +265,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   quickLabel: { fontSize: 12, fontWeight: '600' },
+  tabs: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  tabText: { fontSize: 13, fontWeight: '600' },
   loadingWrap: { alignItems: 'center', paddingVertical: 40, gap: 12 },
   loadingText: { fontSize: 14, opacity: 0.5 },
   errorCard: {
@@ -283,53 +317,59 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   createText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  card: {
+  planList: { gap: 16 },
+  planCard: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 14,
     padding: 16,
-    marginBottom: 16,
   },
-  cardHeader: {
+  planHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  cardTitle: { fontSize: 18, fontWeight: '700' },
+  planTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  planName: { fontSize: 16, fontWeight: '700', flex: 1 },
   statusBadge: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  statusText: { fontSize: 12, fontWeight: '600' },
-  planInfo: { gap: 10, marginBottom: 16 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  infoLabel: { fontSize: 14, opacity: 0.6 },
-  infoValue: { fontSize: 14, fontWeight: '600' },
-  viewBtn: {
+  statusText: { fontSize: 11, fontWeight: '600' },
+  planMeta: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 12,
+  },
+  metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
+  },
+  metaText: { fontSize: 13, opacity: 0.7 },
+  planActions: {
+    flexDirection: 'row',
     gap: 8,
-    paddingVertical: 12,
-    borderRadius: 10,
   },
-  viewText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  weekGrid: {
+  actionBtn: {
+    flex: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 12,
-    marginBottom: 16,
-  },
-  dayCell: { alignItems: 'center', gap: 6 },
-  dayLabel: { fontSize: 12, opacity: 0.6 },
-  dayCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 8,
   },
-  weekProgress: { fontSize: 13, opacity: 0.6, textAlign: 'center' },
+  actionBtnOutline: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+  },
+  actionBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  actionBtnTextOutline: { fontSize: 13, fontWeight: '600' },
 });

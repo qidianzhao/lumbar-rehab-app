@@ -122,7 +122,8 @@ export default function CheckinLeaderboardScreen() {
       const result = await getLeaderboard(p);
       setData(result);
     } catch (e) {
-      setError(handleError(e, '加载失败'));
+      const errorInfo = handleError(e, '加载失败');
+      setError(errorInfo.message);
     } finally {
       setLoading(false);
       setRefreshing(false);

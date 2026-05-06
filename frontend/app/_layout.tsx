@@ -74,7 +74,7 @@ function RootLayoutNav() {
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="training" options={{ headerShown: false }} />
-        <Stack.Screen name="assessment" options={{ title: '体能测试' }} />
+        <Stack.Screen name="assessment" options={{ headerShown: false }} />
         <Stack.Screen name="profile" options={{ title: '个人中心' }} />
         <Stack.Screen name="actions" options={{ title: '动作库' }} />
         <Stack.Screen name="plan" options={{ headerShown: false }} />

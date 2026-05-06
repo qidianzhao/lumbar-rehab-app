@@ -42,6 +42,11 @@ export interface TrainingPlan {
   updated_at: string;
   days: PlanDay[];
   progress_week: number | null;
+  // 新增字段
+  plan_type?: string; // training | stretch | eye_exercise
+  duration_minutes?: number; // 单次方案时长
+  total_actions?: number; // 动作总数（前端计算）
+  estimated_duration_minutes?: number; // 兼容旧字段
 }
 
 export interface PlanGenerateBody {
@@ -68,6 +73,12 @@ export async function getCurrentPlan(): Promise<TrainingPlan | null> {
     throw new Error(res.data.message || '请求失败');
   }
   return res.data.data;
+}
+
+export async function getMyPlans(planType?: string): Promise<TrainingPlan[]> {
+  const params = planType ? { plan_type: planType } : {};
+  const res = await api.get<ApiEnvelope<TrainingPlan[]>>('/plans/', { params });
+  return unwrap(res.data);
 }
 
 export async function getPlanById(planId: number): Promise<TrainingPlan> {
@@ -98,3 +109,19 @@ export async function updatePlanDay(planId: number, dayId: number, body: UpdateP
   const res = await api.put<ApiEnvelope<PlanDay>>(`/plans/${planId}/days/${dayId}`, body);
   return unwrap(res.data);
 }
+
+export interface AIPlanModifyBody {
+  instruction: string;
+}
+
+export interface AIPlanModifyResponse {
+  success: boolean;
+  message: string;
+  modified_exercises: PlanExercise[] | null;
+}
+
+export async function aiModifyPlanDay(planId: number, dayId: number, body: AIPlanModifyBody): Promise<AIPlanModifyResponse> {
+  const res = await api.post<ApiEnvelope<AIPlanModifyResponse>>(`/plans/${planId}/days/${dayId}/ai-modify`, body);
+  return unwrap(res.data);
+}
+

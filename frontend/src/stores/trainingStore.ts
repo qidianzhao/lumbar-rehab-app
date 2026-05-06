@@ -120,6 +120,7 @@ export const useTrainingStore = create<TrainingState>()(
         currentSet: state.currentSet,
         startedAtMs: state.startedAtMs,
         safetyNotice: state.safetyNotice,
+        lastReport: state.lastReport,
       }),
     }
   )

@@ -79,7 +79,8 @@ export default function PlanDetailScreen() {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(handleError(e, '加载失败'));
+          const errorInfo = handleError(e, '加载失败');
+          setError(errorInfo.message);
         }
       } finally {
         if (!cancelled) {
@@ -110,7 +111,8 @@ export default function PlanDetailScreen() {
       const p = await planApi.confirmPlan(plan.id);
       setPlan(p);
     } catch (e) {
-      setError(handleError(e, '确认失败'));
+      const errorInfo = handleError(e, '确认失败');
+      setError(errorInfo.message);
     } finally {
       setConfirming(false);
     }

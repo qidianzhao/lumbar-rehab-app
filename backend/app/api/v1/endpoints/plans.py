@@ -10,9 +10,10 @@ from app.dependencies import get_current_user
 from app.models.action import Action
 from app.models.training_plan import PlanStatus, TrainingPlan, PlanDay, PlanExercise
 from app.schemas.common import APIResponse
-from app.schemas.training_plan import PlanDayResponse, PlanExerciseResponse, PlanGenerateRequest, TrainingPlanResponse, UpdatePlanDayRequest
+from app.schemas.training_plan import AIPlanModifyRequest, AIPlanModifyResponse, PlanDayResponse, PlanExerciseResponse, PlanGenerateRequest, TrainingPlanResponse, UpdatePlanDayRequest
 from app.services import plan_generator
 from app.services.action_seed import ensure_actions_seeded
+from app.services.ai_plan_modifier import modify_plan_with_ai
 from app.services.ai_usage_service import record_usage
 
 router = APIRouter()
@@ -149,6 +150,41 @@ async def get_current_plan(
     if loaded is None:
         return APIResponse(code=0, message="ok", data=None)
     return APIResponse(code=0, message="ok", data=await _plan_to_response(loaded, db))
+
+
+@router.get("/", response_model=APIResponse[list[TrainingPlanResponse]])
+async def get_my_plans(
+    plan_type: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> APIResponse[list[TrainingPlanResponse]]:
+    """获取当前用户的所有方案列表，可按plan_type筛选"""
+    user_id = int(current_user["id"])
+
+    query = select(TrainingPlan).where(TrainingPlan.user_id == user_id)
+
+    # 按plan_type筛选
+    if plan_type:
+        query = query.where(TrainingPlan.plan_type == plan_type)
+
+    # 按状态和更新时间排序：active > draft > archived，同状态按更新时间倒序
+    query = query.order_by(
+        TrainingPlan.status.desc(),
+        TrainingPlan.updated_at.desc()
+    )
+
+    result = await db.execute(query)
+    plans = result.scalars().all()
+
+    # 转换为响应格式
+    responses = []
+    for plan in plans:
+        loaded = await plan_generator.load_plan_with_days(db, plan.id)
+        if loaded:
+            responses.append(await _plan_to_response(loaded, db))
+
+    return APIResponse(code=0, message="ok", data=responses)
+
 
 
 @router.get("/{plan_id}", response_model=APIResponse[TrainingPlanResponse])
@@ -295,3 +331,86 @@ async def update_plan_day(
     )
 
     return APIResponse(code=0, message="ok", data=response)
+
+
+@router.post("/{plan_id}/days/{day_id}/ai-modify", response_model=APIResponse[AIPlanModifyResponse])
+async def ai_modify_plan_day(
+    plan_id: int,
+    day_id: int,
+    body: AIPlanModifyRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> APIResponse[AIPlanModifyResponse]:
+    """使用AI助手修改训练方案"""
+    user_id = int(current_user["id"])
+
+    # 验证计划所有权
+    loaded = await plan_generator.load_plan_with_days(db, plan_id)
+    if loaded is None or loaded.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="计划不存在")
+
+    # 查找目标训练日
+    day_result = await db.execute(
+        select(PlanDay).where(PlanDay.id == day_id, PlanDay.plan_id == plan_id)
+    )
+    day = day_result.scalar_one_or_none()
+    if day is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="训练日不存在")
+
+    # 调用AI修改服务
+    success, message, modified_exercises = await modify_plan_with_ai(
+        day=day,
+        instruction=body.instruction,
+        db=db,
+    )
+
+    # 记录AI用量
+    await record_usage(
+        user_id=user_id,
+        usage_type="plan_modification",
+        input_tokens=0,
+        output_tokens=0,
+        db=db,
+    )
+
+    # 如果成功，构建响应
+    exercises_response = None
+    if success and modified_exercises:
+        # 重新加载以获取完整数据（包括新的ID）
+        await db.refresh(day)
+        day_result = await db.execute(
+            select(PlanDay).where(PlanDay.id == day_id)
+        )
+        refreshed_day = day_result.scalar_one()
+
+        # 获取所有action信息
+        action_ids = {ex.action_id for ex in refreshed_day.exercises}
+        action_result = await db.execute(select(Action).where(Action.id.in_(action_ids)))
+        actions = action_result.scalars().all()
+        action_map = {act.id: act for act in actions}
+
+        exercises_response = []
+        for ex in sorted(refreshed_day.exercises, key=lambda e: e.sort_order):
+            action = action_map.get(ex.action_id)
+            exercises_response.append(
+                PlanExerciseResponse(
+                    id=ex.id,
+                    action_id=ex.action_id,
+                    name=ex.name,
+                    phase=ex.phase,
+                    sets=ex.sets,
+                    reps=ex.reps,
+                    rest_seconds=ex.rest_seconds,
+                    sort_order=ex.sort_order,
+                    video_url=_build_video_url(action.video_url) if action and action.video_url else None,
+                )
+            )
+
+    response_data = AIPlanModifyResponse(
+        success=success,
+        message=message,
+        modified_exercises=exercises_response,
+    )
+
+    return APIResponse(code=0, message="ok", data=response_data)
+

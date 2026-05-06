@@ -1,11 +1,12 @@
 # 腰突康复运动App — API接口文档
 
-**文档版本：** v1.2
-**日期：** 2026年5月1日
-**配套文档：** PRD v1.0、技术方案文档 v1.1、数据库设计文档 v1.0
+**文档版本：** v1.3
+**日期：** 2026年5月3日
+**配套文档：** PRD v1.0、技术方案文档 v1.1、数据库设计文档 v1.1
 **Base URL：** `http://192.168.5.119:8000/api/v1`（开发环境）
 **认证方式：** Bearer Token（JWT）
 **数据格式：** JSON
+**更新说明：** v2.1架构重构 - 新增方案列表和AI修改方案接口
 
 ---
 
@@ -634,6 +635,111 @@ POST /plans/{plan_id}/downgrade
     "new_plan_id": "cc0e8400-...",
     "message": "已为你生成新的初级计划，之前的训练记录已保留。"
   }
+}
+```
+
+---
+
+### 6.6 获取我的方案列表 **[v2.1新增]**
+
+```
+GET /plans/?plan_type={plan_type}
+```
+
+**查询参数：**
+- `plan_type` (可选): 方案类型筛选，可选值：`training`(训练)、`stretch`(拉伸)、`eye_exercise`(眼保健操)
+
+**响应：**
+```json
+{
+  "code": 0,
+  "data": [
+    {
+      "id": "aa0e8400-...",
+      "title": "核心强化训练方案",
+      "plan_type": "training",
+      "level": "BEGINNER",
+      "duration_minutes": 25,
+      "status": "ACTIVE",
+      "action_count": 8,
+      "created_at": "2026-05-03T10:00:00Z",
+      "updated_at": "2026-05-03T10:00:00Z"
+    },
+    {
+      "id": "bb0e8400-...",
+      "title": "办公室拉伸方案",
+      "plan_type": "stretch",
+      "level": "BEGINNER",
+      "duration_minutes": 10,
+      "status": "ACTIVE",
+      "action_count": 5,
+      "created_at": "2026-05-03T11:00:00Z",
+      "updated_at": "2026-05-03T11:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### 6.7 AI修改方案 **[v2.1新增]**
+
+```
+POST /plans/{plan_id}/days/{day_id}/ai-modify
+```
+
+**请求体：**
+```json
+{
+  "instruction": "增加核心训练强度，把平板支撑改为4组"
+}
+```
+
+**响应：**
+```json
+{
+  "code": 0,
+  "data": {
+    "success": true,
+    "message": "已根据你的要求修改方案",
+    "changes": [
+      {
+        "type": "update",
+        "action_name": "平板支撑",
+        "field": "sets",
+        "old_value": 3,
+        "new_value": 4
+      }
+    ],
+    "updated_exercises": [
+      {
+        "id": "ex001",
+        "action_id": "ACT_PLANK_01",
+        "action_name": "平板支撑",
+        "sets": 4,
+        "reps": "30秒",
+        "rest_seconds": 30,
+        "phase": "core",
+        "sort_order": 1
+      }
+    ]
+  }
+}
+```
+
+**支持的自然语言指令示例：**
+- "增加核心训练强度"
+- "减少拉伸时间"
+- "添加平板支撑动作"
+- "把第一个动作的组数改为4组"
+- "删除所有热身动作"
+- "把臀桥的休息时间改为45秒"
+
+**错误响应：**
+```json
+{
+  "code": 400,
+  "message": "无法理解你的指令，请尝试更具体的描述"
 }
 ```
 

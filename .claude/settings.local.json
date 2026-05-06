@@ -34,7 +34,16 @@
       "Bash(awk '{print $5}')",
       "Bash(taskkill *)",
       "Bash(alembic revision *)",
-      "Bash(psql -U postgres -d ldh_training -f migrations/remove_checkin_unique_constraint.sql)"
+      "Bash(psql -U postgres -d ldh_training -f migrations/remove_checkin_unique_constraint.sql)",
+      "Bash(pip list *)",
+      "Bash(pip install *)",
+      "Bash(pip freeze *)",
+      "Bash(alembic current *)",
+      "Bash(psql *)",
+      "Bash(npx expo-cli *)",
+      "Bash(npx react-native *)",
+      "Bash(findstr \"LISTENING\")",
+      "Bash(findstr -E \"7890 10809 1080 7891\")"
     ]
   }
 }

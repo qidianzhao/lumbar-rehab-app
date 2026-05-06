@@ -54,7 +54,8 @@ export default function AssessmentResultScreen() {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(handleError(e, '加载失败'));
+          const errorInfo = handleError(e, '加载失败');
+          setError(errorInfo.message);
         }
       } finally {
         if (!cancelled) setLoading(false);

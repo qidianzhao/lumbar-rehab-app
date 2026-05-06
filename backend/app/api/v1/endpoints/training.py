@@ -65,7 +65,7 @@ async def create_training_session(
         .where(PlanDay.id == body.plan_day_id, PlanDay.plan_id == body.plan_id)
         .options(
             selectinload(PlanDay.exercises),
-            selectinload(PlanDay.plan),
+            selectinload(PlanDay.plan).selectinload(TrainingPlan.days),
         )
     )
     plan_day = (await db.execute(q_day)).scalar_one_or_none()

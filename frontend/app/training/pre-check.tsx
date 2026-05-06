@@ -58,7 +58,8 @@ export default function TrainingPreCheckScreen() {
       setModalVisible(false);
       router.replace('/training/session' as Href);
     } catch (e) {
-      setError(handleError(e, '创建会话失败'));
+      const errorInfo = handleError(e, '创建会话失败');
+      setError(errorInfo.message);
     } finally {
       setLoading(false);
     }

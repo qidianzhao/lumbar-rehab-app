@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -28,7 +29,9 @@ def _build_video_url(path: str | None) -> str | None:
     if path.startswith("http"):
         return path
     base = (settings.VIDEO_SERVER_URL or "http://localhost:8080").rstrip("/")
-    return f"{base}{path}"
+    # URL encode the path to handle Chinese characters
+    encoded_path = quote(path, safe='/')
+    return f"{base}{encoded_path}"
 
 
 class ActionOut(BaseModel):

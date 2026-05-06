@@ -13,6 +13,13 @@ class PlanStatus(StrEnum):
     archived = "archived"
 
 
+class PlanType(StrEnum):
+    """方案类型"""
+    training = "training"  # 训练方案
+    stretch = "stretch"  # 拉伸方案
+    eye_exercise = "eye_exercise"  # 眼保健操
+
+
 class DayType(StrEnum):
     training = "training"
     rest = "rest"
@@ -29,10 +36,29 @@ class TrainingPlan(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     level: Mapped[str] = mapped_column(String(32), nullable=False, default="beginner")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=PlanStatus.draft.value)
-    weekly_frequency: Mapped[int] = mapped_column(Integer, nullable=False)
-    estimated_weeks: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # 新增：方案类型（训练/拉伸/眼保健操）
+    plan_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=PlanType.training.value,
+        index=True,
+        comment="方案类型: training | stretch | eye_exercise",
+    )
+
+    # 新增：单次方案预计时长（分钟）
+    duration_minutes: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="单次方案预计时长（分钟）",
+    )
+
+    # 保留字段（兼容旧数据）
+    weekly_frequency: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    estimated_weeks: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
     assessment_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     preferred_duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,

@@ -77,8 +77,9 @@ async def get_checkin_calendar(
 
     # 连续打卡天数（从今天往前数，使用不重复的日期）
     all_dates_q = await db.execute(
-        select(func.distinct(Checkin.checkin_date))
+        select(Checkin.checkin_date)
         .where(Checkin.user_id == user_id)
+        .distinct()
         .order_by(Checkin.checkin_date.desc())
     )
     all_dates = [r[0] for r in all_dates_q.all()]
@@ -182,8 +183,9 @@ async def get_leaderboard(
     # 批量查询这些用户的全部打卡日期（用于计算 streak，使用不重复日期）
     all_dates_q = (
         await db.execute(
-            select(Checkin.user_id, func.distinct(Checkin.checkin_date))
+            select(Checkin.user_id, Checkin.checkin_date)
             .where(Checkin.user_id.in_(involved_ids))
+            .distinct()
             .order_by(Checkin.checkin_date.desc())
         )
     ).all()

@@ -112,6 +112,9 @@ async def _xfyun_asr(pcm_data: bytes) -> str:
     api_key = settings.XFYUN_API_KEY or ""
     api_secret = settings.XFYUN_API_SECRET or ""
 
+    if not app_id or not api_key or not api_secret:
+        raise RuntimeError("讯飞ASR配置缺失")
+
     host = "iat-api.xfyun.cn"
     path = "/v2/iat"
     url = _xfyun_auth_url(host, path, api_key, api_secret)
@@ -120,7 +123,8 @@ async def _xfyun_asr(pcm_data: bytes) -> str:
 
     result_parts: list[str] = []
 
-    async with websockets.connect(url) as ws:
+    print(f"连接讯飞ASR WebSocket: {host}{path}")
+    async with websockets.connect(url, ping_interval=None) as ws:
         # 首帧
         first_frame = {
             "common": {"app_id": app_id},
@@ -139,6 +143,7 @@ async def _xfyun_asr(pcm_data: bytes) -> str:
             },
         }
         await ws.send(json.dumps(first_frame))
+        print("已发送首帧")
 
         # 中间帧
         offset = CHUNK
@@ -159,6 +164,7 @@ async def _xfyun_asr(pcm_data: bytes) -> str:
         await ws.send(json.dumps({
             "data": {"status": 2, "format": "audio/L16;rate=16000", "encoding": "raw", "audio": ""}
         }))
+        print("已发送末帧，等待识别结果...")
 
         # 接收结果
         while True:
@@ -166,7 +172,9 @@ async def _xfyun_asr(pcm_data: bytes) -> str:
             data = json.loads(msg)
             code = data.get("code", -1)
             if code != 0:
-                raise RuntimeError(f"讯飞ASR错误 code={code}: {data.get('message')}")
+                error_msg = f"讯飞ASR错误 code={code}: {data.get('message')}"
+                print(error_msg)
+                raise RuntimeError(error_msg)
             ws_data = data.get("data", {})
             result = ws_data.get("result", {})
             ws_text = result.get("ws", [])
@@ -174,6 +182,7 @@ async def _xfyun_asr(pcm_data: bytes) -> str:
                 for cw in w.get("cw", []):
                     result_parts.append(cw.get("w", ""))
             if ws_data.get("status") == 2:
+                print(f"ASR识别完成，结果: {''.join(result_parts)}")
                 break
 
     return "".join(result_parts)
@@ -197,8 +206,14 @@ async def asr(
     print(f"PCM 数据大小: {len(pcm)}")
 
     try:
+        print("开始调用讯飞ASR...")
         text = await _xfyun_asr(pcm)
+        print(f"ASR识别结果: {text}")
+    except asyncio.TimeoutError as e:
+        print(f"ASR超时: {e}")
+        raise HTTPException(status_code=504, detail="语音识别超时，请重试") from e
     except Exception as e:
+        print(f"ASR异常: {type(e).__name__}: {e}")
         raise HTTPException(status_code=502, detail=f"ASR服务异常: {e}") from e
 
     return {"code": 0, "message": "ok", "data": {"text": text}}

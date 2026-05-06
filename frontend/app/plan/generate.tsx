@@ -36,7 +36,8 @@ export default function PlanGenerateScreen() {
       });
       router.replace(`/plan/${plan.id}` as Href);
     } catch (e) {
-      setError(handleError(e, '生成失败'));
+      const errorInfo = handleError(e, '生成失败');
+      setError(errorInfo.message);
     } finally {
       setSubmitting(false);
     }

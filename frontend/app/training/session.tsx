@@ -234,9 +234,9 @@ export default function TrainingSessionScreen() {
   }, [phase]);
 
   const onViewReport = useCallback(() => {
-    reset(); // 清除训练状态
+    // 不要在这里 reset()，让报告页面在离开时清理
     router.replace('/training/report' as Href);
-  }, [reset]);
+  }, [router]);
 
   const onBackHome = useCallback(() => {
     reset(); // 清除训练状态
@@ -267,6 +267,9 @@ export default function TrainingSessionScreen() {
           const summary = `训练完成，干得漂亮！你完成了${totalActions}个动作的训练，继续保持，你会越来越强！`;
           speakText(summary).catch(() => {});
         }
+      } else {
+        // 如果训练未完成且当前是暂停状态，保持暂停
+        // 新动作的视频会在 useEffect 中根据 paused 状态决定是否播放
       }
     }
     finally { setBusy(false); }
@@ -367,22 +370,25 @@ export default function TrainingSessionScreen() {
           : `第${currentActionIndex + 1}个动作：${current.name}，注意保持正确姿势。开始！`;
         speakText(tip)
           .then(() => {
-            if (videoUrl && !pausedRef.current) {
+            // 只有在非暂停状态下才播放视频
+            if (videoUrl && !pausedRef.current && !paused) {
               try { player.play(); } catch (e) { logger.warn('播放失败:', e); }
             }
           })
           .catch(() => {
-            if (videoUrl && !pausedRef.current) {
+            // 只有在非暂停状态下才播放视频
+            if (videoUrl && !pausedRef.current && !paused) {
               try { player.play(); } catch (e) { logger.warn('播放失败:', e); }
             }
           });
       } else {
-        if (videoUrl) {
+        // 只有在非暂停状态下才播放视频
+        if (videoUrl && !paused) {
           try { player.play(); } catch (e) { logger.warn('播放失败:', e); }
         }
       }
     })();
-  }, [currentActionIndex, current, isOnline, voiceEnabled, getVideoUrl]);
+  }, [currentActionIndex, current, isOnline, voiceEnabled, getVideoUrl, paused]);
 
   if (phase === 'finished') {
     return (
