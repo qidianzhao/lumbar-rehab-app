@@ -125,3 +125,14 @@ export async function aiModifyPlanDay(planId: number, dayId: number, body: AIPla
   return unwrap(res.data);
 }
 
+export interface UpdatePlanBody {
+  name?: string;
+  description?: string;
+  status?: string;
+}
+
+export async function updatePlan(planId: number, body: UpdatePlanBody): Promise<TrainingPlan> {
+  const res = await api.put<ApiEnvelope<TrainingPlan>>(`/plans/${planId}`, body);
+  return unwrap(res.data);
+}
+

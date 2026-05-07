@@ -14,6 +14,16 @@ class ActionCategory(StrEnum):
     warmup = "warmup"  # 热身
 
 
+class BodyPart(StrEnum):
+    """人体部位"""
+    neck = "neck"  # 颈部
+    shoulder = "shoulder"  # 肩部
+    back = "back"  # 背部
+    waist = "waist"  # 腰部
+    hip = "hip"  # 臀部
+    leg = "leg"  # 腿部
+
+
 class Action(Base):
     """动作库，供训练计划引用真实 action_id。"""
 
@@ -41,4 +51,10 @@ class Action(Base):
         String(512),
         nullable=True,
         comment="视频缩略图URL",
+    )
+    body_part: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+        index=True,
+        comment="人体部位: neck | shoulder | back | waist | hip | leg",
     )

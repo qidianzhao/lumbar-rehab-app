@@ -14,6 +14,7 @@ import {
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
+import AiAssistantModal from '@/components/AiAssistantModal';
 import type { PlanDay, PlanExercise, UpdatePlanDayExercise } from '@/src/services/planApi';
 import * as planApi from '@/src/services/planApi';
 import { handleError } from '@/src/utils/errorHandler';
@@ -36,9 +37,7 @@ export default function EditPlanDayScreen() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [aiModifying, setAiModifying] = useState(false);
-  const [showAiInput, setShowAiInput] = useState(false);
-  const [aiInstruction, setAiInstruction] = useState('');
+  const [showAiAssistant, setShowAiAssistant] = useState(false);
   const [planDay, setPlanDay] = useState<PlanDay | null>(null);
   const [exercises, setExercises] = useState<EditableExercise[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -142,41 +141,6 @@ export default function EditPlanDayScreen() {
     }
   };
 
-  const handleAiModify = async () => {
-    if (!aiInstruction.trim()) {
-      Alert.alert('提示', '请输入修改指令');
-      return;
-    }
-
-    setAiModifying(true);
-    setError(null);
-
-    try {
-      const result = await planApi.aiModifyPlanDay(planId, planDayId, {
-        instruction: aiInstruction.trim(),
-      });
-
-      if (result.success && result.modified_exercises) {
-        // 更新本地exercises状态
-        setExercises(result.modified_exercises.map((ex, idx) => ({
-          ...ex,
-          sort_order: idx,
-        })));
-        Alert.alert('AI修改成功', result.message);
-        setAiInstruction('');
-        setShowAiInput(false);
-      } else {
-        Alert.alert('AI修改失败', result.message);
-      }
-    } catch (e) {
-      const errorInfo = handleError(e, 'AI修改失败');
-      setError(errorInfo.message);
-      Alert.alert('AI修改失败', errorInfo.message);
-    } finally {
-      setAiModifying(false);
-    }
-  };
-
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: theme.background }]}>
@@ -210,43 +174,6 @@ export default function EditPlanDayScreen() {
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
-
-        {/* AI助手区域 */}
-        <View style={[styles.aiSection, { borderColor: theme.tabIconDefault }]}>
-          <Pressable
-            style={[styles.aiToggleBtn, { backgroundColor: showAiInput ? theme.tint : 'transparent' }]}
-            onPress={() => setShowAiInput(!showAiInput)}
-          >
-            <Text style={[styles.aiToggleText, { color: showAiInput ? '#fff' : theme.tint }]}>
-              🤖 AI助手
-            </Text>
-          </Pressable>
-
-          {showAiInput && (
-            <View style={styles.aiInputContainer}>
-              <TextInput
-                style={[styles.aiInput, { borderColor: theme.tabIconDefault, color: theme.text }]}
-                value={aiInstruction}
-                onChangeText={setAiInstruction}
-                placeholder="例如：增加核心训练强度、减少拉伸时间、添加平板支撑..."
-                placeholderTextColor={theme.tabIconDefault}
-                multiline
-                numberOfLines={3}
-              />
-              <Pressable
-                style={[styles.aiSubmitBtn, { backgroundColor: theme.tint, opacity: aiModifying ? 0.5 : 1 }]}
-                onPress={handleAiModify}
-                disabled={aiModifying}
-              >
-                {aiModifying ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.aiSubmitText}>应用修改</Text>
-                )}
-              </Pressable>
-            </View>
-          )}
-        </View>
 
         <View style={styles.exerciseList}>
           {exercises.map((ex, idx) => (
@@ -329,6 +256,15 @@ export default function EditPlanDayScreen() {
         >
           <Text style={[styles.btnOutlineText, { color: theme.text }]}>取消</Text>
         </Pressable>
+
+        <Pressable
+          style={[styles.btnOutline, { borderColor: theme.tint }]}
+          onPress={() => setShowAiAssistant(true)}
+        >
+          <FontAwesome name="comments" size={16} color={theme.tint} />
+          <Text style={[styles.btnOutlineText, { color: theme.tint }]}>AI助手</Text>
+        </Pressable>
+
         <Pressable
           style={[styles.btn, { backgroundColor: theme.tint, opacity: saving ? 0.5 : 1, flex: 1 }]}
           onPress={handleSave}
@@ -341,6 +277,12 @@ export default function EditPlanDayScreen() {
           )}
         </Pressable>
       </View>
+
+      <AiAssistantModal
+        visible={showAiAssistant}
+        onClose={() => setShowAiAssistant(false)}
+        title="AI助手"
+      />
     </View>
   );
 }
@@ -353,44 +295,6 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 16, opacity: 0.85, marginBottom: 16 },
   errorBanner: { padding: 12, borderRadius: 8, marginBottom: 16 },
   errorText: { color: '#c62828', fontSize: 14 },
-  aiSection: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-  },
-  aiToggleBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  aiToggleText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  aiInputContainer: {
-    marginTop: 12,
-    gap: 12,
-  },
-  aiInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  aiSubmitBtn: {
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  aiSubmitText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
-  },
   exerciseList: { gap: 12 },
   exerciseCard: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -453,11 +357,14 @@ const styles = StyleSheet.create({
   },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   btnOutline: {
+    flexDirection: 'row',
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: 12,
     borderWidth: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     justifyContent: 'center',
   },
   btnOutlineText: { fontSize: 16, fontWeight: '600' },

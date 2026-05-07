@@ -10,7 +10,7 @@ from app.dependencies import get_current_user
 from app.models.action import Action
 from app.models.training_plan import PlanStatus, TrainingPlan, PlanDay, PlanExercise
 from app.schemas.common import APIResponse
-from app.schemas.training_plan import AIPlanModifyRequest, AIPlanModifyResponse, PlanDayResponse, PlanExerciseResponse, PlanGenerateRequest, TrainingPlanResponse, UpdatePlanDayRequest
+from app.schemas.training_plan import AddExerciseToPlanRequest, AIPlanModifyRequest, AIPlanModifyResponse, PlanDayResponse, PlanExerciseResponse, PlanGenerateRequest, TrainingPlanResponse, UpdatePlanDayRequest
 from app.services import plan_generator
 from app.services.action_seed import ensure_actions_seeded
 from app.services.ai_plan_modifier import modify_plan_with_ai
@@ -413,4 +413,106 @@ async def ai_modify_plan_day(
     )
 
     return APIResponse(code=0, message="ok", data=response_data)
+
+
+@router.post("/{plan_id}/exercises", response_model=APIResponse[PlanExerciseResponse])
+async def add_exercise_to_plan(
+    plan_id: int,
+    body: AddExerciseToPlanRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> APIResponse[PlanExerciseResponse]:
+    """添加动作到方案"""
+    user_id = int(current_user["id"])
+
+    # 验证方案所有权
+    plan_result = await db.execute(
+        select(TrainingPlan).where(TrainingPlan.id == plan_id, TrainingPlan.user_id == user_id)
+    )
+    plan = plan_result.scalar_one_or_none()
+    if plan is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="方案不存在")
+
+    # 验证训练日存在
+    day_result = await db.execute(
+        select(PlanDay).where(PlanDay.id == body.plan_day_id, PlanDay.plan_id == plan_id)
+    )
+    day = day_result.scalar_one_or_none()
+    if day is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="训练日不存在")
+
+    # 验证动作存在
+    action_result = await db.execute(select(Action).where(Action.id == body.action_id))
+    action = action_result.scalar_one_or_none()
+    if action is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="动作不存在")
+
+    # 获取当前所有动作
+    exercises_result = await db.execute(
+        select(PlanExercise)
+        .where(PlanExercise.plan_day_id == body.plan_day_id)
+        .order_by(PlanExercise.sort_order)
+    )
+    existing_exercises = list(exercises_result.scalars().all())
+
+    # 计算新动作的 sort_order
+    new_sort_order = 0
+    if body.insert_position == "start":
+        new_sort_order = 0
+        # 更新其他动作的 sort_order
+        for ex in existing_exercises:
+            ex.sort_order += 1
+    elif body.insert_position == "end":
+        new_sort_order = len(existing_exercises)
+    elif body.insert_position == "after":
+        if body.after_exercise_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="插入位置为after时必须指定after_exercise_id",
+            )
+        # 找到目标动作
+        target_ex = next((ex for ex in existing_exercises if ex.id == body.after_exercise_id), None)
+        if target_ex is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="目标动作不存在")
+        new_sort_order = target_ex.sort_order + 1
+        # 更新后续动作的 sort_order
+        for ex in existing_exercises:
+            if ex.sort_order >= new_sort_order:
+                ex.sort_order += 1
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="insert_position必须是start/end/after之一",
+        )
+
+    # 创建新动作
+    new_exercise = PlanExercise(
+        plan_day_id=body.plan_day_id,
+        action_id=body.action_id,
+        name=action.name,
+        phase=action.phase,
+        sets=body.sets,
+        reps=body.reps,
+        rest_seconds=body.rest_seconds,
+        sort_order=new_sort_order,
+    )
+    db.add(new_exercise)
+    await db.commit()
+    await db.refresh(new_exercise)
+
+    # 构建响应
+    response = PlanExerciseResponse(
+        id=new_exercise.id,
+        action_id=new_exercise.action_id,
+        name=new_exercise.name,
+        phase=new_exercise.phase,
+        sets=new_exercise.sets,
+        reps=new_exercise.reps,
+        rest_seconds=new_exercise.rest_seconds,
+        sort_order=new_exercise.sort_order,
+        video_url=_build_video_url(action.video_url) if action.video_url else None,
+    )
+
+    return APIResponse(code=0, message="ok", data=response)
+
 

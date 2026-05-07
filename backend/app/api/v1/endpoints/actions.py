@@ -38,27 +38,37 @@ class ActionOut(BaseModel):
     id: int
     name: str
     phase: str
+    category: str | None = None
+    body_part: str | None = None
     difficulty_level: int
     description: str | None
     video_url: str | None
+    thumbnail_url: str | None = None
 
     model_config = {"from_attributes": True}
 
 
 @router.get("", response_model=list[ActionOut])
-async def list_actions(db: AsyncSession = Depends(get_db)):
+async def list_actions(body_part: str | None = None, db: AsyncSession = Depends(get_db)):
     mapping = _load_mapping()
-    rows = (await db.execute(select(Action).order_by(Action.phase, Action.difficulty_level))).scalars().all()
+    query = select(Action).order_by(Action.phase, Action.difficulty_level)
+    if body_part:
+        query = query.where(Action.body_part == body_part)
+    rows = (await db.execute(query)).scalars().all()
     result = []
     for row in rows:
         video_url = _build_video_url(row.video_url or mapping.get(row.name))
+        thumbnail_url = _build_video_url(row.thumbnail_url) if row.thumbnail_url else None
         result.append(ActionOut(
             id=row.id,
             name=row.name,
             phase=row.phase,
+            category=row.category,
+            body_part=row.body_part,
             difficulty_level=row.difficulty_level,
             description=row.description,
             video_url=video_url,
+            thumbnail_url=thumbnail_url,
         ))
     return result
 
@@ -71,11 +81,15 @@ async def get_action(action_id: int, db: AsyncSession = Depends(get_db)):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="动作不存在")
     video_url = _build_video_url(row.video_url or mapping.get(row.name))
+    thumbnail_url = _build_video_url(row.thumbnail_url) if row.thumbnail_url else None
     return ActionOut(
         id=row.id,
         name=row.name,
         phase=row.phase,
+        category=row.category,
+        body_part=row.body_part,
         difficulty_level=row.difficulty_level,
         description=row.description,
         video_url=video_url,
+        thumbnail_url=thumbnail_url,
     )

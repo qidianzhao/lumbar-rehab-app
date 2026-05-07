@@ -79,3 +79,14 @@ class AIPlanModifyResponse(BaseModel):
     success: bool
     message: str
     modified_exercises: list[PlanExerciseResponse] | None = None
+
+
+class AddExerciseToPlanRequest(BaseModel):
+    action_id: int = Field(description="要添加的动作ID")
+    plan_day_id: int = Field(description="目标训练日ID")
+    insert_position: str = Field(description="插入位置：start/end/after")
+    after_exercise_id: int | None = Field(default=None, description="插入到某个动作后（insert_position=after时必填）")
+    sets: int = Field(default=3, ge=1, le=10, description="组数")
+    reps: int = Field(default=12, ge=1, le=100, description="次数")
+    rest_seconds: int = Field(default=60, ge=0, le=300, description="休息时间（秒）")
+
